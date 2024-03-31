@@ -1,0 +1,6 @@
+black==24.3.0
+detect-secrets==1.4.0
+flake8==7.0.0
+isort==5.13.2
+pip-tools
+pre-commit==3.7.0

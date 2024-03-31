@@ -1,0 +1,8 @@
+ansible
+openssh_wrapper
+paramiko
+proxmoxer
+pulumi>=3.0.0,<4.0.0
+pulumi_command
+pulumi_tls
+requests
