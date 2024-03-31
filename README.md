@@ -25,6 +25,7 @@ What I'm trying to accomplish with this repo is:
   - ✅Setup a Nixos cloud-init image
     - ❌Create a Nixos samba server
       - **NOTE**: The `nix` config files are here, but haven't been cleaned up yet. I also like [snapraid](https://www.snapraid.it), so I intend to have it run that. That stuff hasn't been cleaned up yet.
+      - **NOTE**: I'm currently doing hardware passthrough of an HBA card so I can directly attach drives from a netapp (I highly recommend going the disk shelf route). You can find them used on ebay for a good price.
   - ❌Setup a VM with both docker and a single node kubernetes node on it with access to the GPU. _(I have this working on an Ubuntu server currently, but I'd like to do it with nixos instead)_
     - ❌Install a bunch of services on the kubernetes node:
       - **NOTE**: Basically all the services I had setup [here](https://github.com/dafrenchyman/home_infra) and some others that I have added over time
