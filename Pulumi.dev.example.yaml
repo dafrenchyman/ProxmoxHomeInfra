@@ -1,0 +1,37 @@
+config:
+  proxmox:proxmox_ip: "192.168.10.10"
+  proxmox:proxmox_pass: "mypassword"
+  proxmox:samba_pass: "mypassword"
+  proxmox:samba_hardware: |
+    {
+      "SnapArray01": {
+        "Disk_01": {
+          "device": "/dev/disk/by-id/<INSERT_ID_HERE>-part1",
+          "fsType": "ext4",
+          "options": ["defaults", "nofail"]
+        },
+        "Disk_02": {
+          "device": "/dev/disk/by-id/<INSERT_ID_HERE>-part1",
+          "fsType": "ext4",
+          "options": ["defaults", "nofail"]
+        },
+        "ParDisk_01": {
+          "device": "/dev/disk/by-id/<INSERT_ID_HERE>-part1",
+          "fsType": "ext4",
+          "options": ["defaults", "nofail"]
+        }
+      },
+      "SnapArray02": {
+        "Disk_01": {
+          "device": "/dev/disk/by-id/<INSERT_ID_HERE>-part1",
+          "fsType": "ext4",
+          "options": ["defaults", "nofail"]
+        },
+        "ParDisk_01": {
+          "device": "/dev/disk/by-id/<INSERT_ID_HERE>-part1",
+          "fsType": "ext4",
+          "options": ["defaults", "nofail"]
+        }
+      }
+    }
+  proxmox:other_feature: test

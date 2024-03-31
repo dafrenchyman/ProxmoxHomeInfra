@@ -19,7 +19,7 @@ What I'm trying to accomplish with this repo is:
   - ✅Remove the enterprise repo
   - ✅Setup a user specific for pulumi installs
   - ✅Setup IOMMU for GPU passthrough
-    - **NOTE**: Has only been tested on Nvidia
+    - **NOTE**: Has only been tested on Intel + Nvidia
   - ✅Setup an API token for Proxmox
   - ✅Setup an Ubuntu cloud-init image
   - ✅Setup a Nixos cloud-init image
