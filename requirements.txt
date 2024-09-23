@@ -47,6 +47,7 @@ paramiko==3.4.0
 parver==0.5
     # via
     #   pulumi-command
+    #   pulumi-kubernetes
     #   pulumi-tls
 protobuf==4.25.3
     # via pulumi
@@ -56,8 +57,11 @@ pulumi==3.109.0
     # via
     #   -r requirements.in
     #   pulumi-command
+    #   pulumi-kubernetes
     #   pulumi-tls
 pulumi-command==0.9.2
+    # via -r requirements.in
+pulumi-kubernetes==3.30.2
     # via -r requirements.in
 pulumi-tls==5.0.1
     # via -r requirements.in
@@ -69,14 +73,18 @@ pyyaml==6.0.1
     # via
     #   ansible-core
     #   pulumi
+    #   pulumi-kubernetes
 requests==2.31.0
-    # via -r requirements.in
+    # via
+    #   -r requirements.in
+    #   pulumi-kubernetes
 resolvelib==1.0.1
     # via ansible-core
 semver==2.13.0
     # via
     #   pulumi
     #   pulumi-command
+    #   pulumi-kubernetes
     #   pulumi-tls
 six==1.16.0
     # via pulumi

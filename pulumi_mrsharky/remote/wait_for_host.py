@@ -1,11 +1,13 @@
 from typing import Optional
 
+import pulumi
 from pulumi import Input, Output, ResourceOptions
 from pulumi.dynamic import CreateResult, Resource, ResourceProvider
 
 from pulumi_mrsharky.common.remote import RemoteMethods
 
 
+@pulumi.input_type
 class WaitForHostArgs(object):
     user: Input[str]
     port: Input[int]
@@ -33,7 +35,6 @@ class WaitForHostArgs(object):
 
 
 class WaitForHostProvider(ResourceProvider):
-
     def create(self, props):
         host = props.get("host")
         port = int(

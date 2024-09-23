@@ -37,11 +37,11 @@ class RebootArgs(object):
 
 class RebootProvider(ResourceProvider):
     def create(self, props):
-        host = props.get("host")
+        host = props.get("host", None)
         port = int(
             props.get("port", 22)
         )  # It will be a float when we get it, need to cast to int
-        user = props.get("user")
+        user = props.get("user", None)
         password = props.get("password", None)
         private_key = props.get("private_key", None)
         max_wait_for_reboot_in_seconds = int(

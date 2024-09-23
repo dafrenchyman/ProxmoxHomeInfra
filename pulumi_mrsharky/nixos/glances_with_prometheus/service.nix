@@ -32,7 +32,15 @@ in {
     config = lib.mkIf cfg.enable {
         # Open selected port in the firewall.
         # We can reference the port that the user configured.
-        networking.firewall.allowedTCPPorts = [ cfg.port ];
+        networking.firewall.allowedTCPPorts = [
+            cfg.port  # Glances prometheus port
+            61208 # Glances
+        ];
+
+        networking.firewall.allowedUDPPorts = [
+            cfg.port  # Glances prometheus port
+            61208 # Glances
+        ];
 
         environment.sessionVariables = rec {
             TERM = "xterm-256color";

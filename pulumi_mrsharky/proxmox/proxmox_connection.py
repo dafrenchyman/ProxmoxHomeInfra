@@ -1,7 +1,9 @@
 import json
+import os
 import re
 import time
-from typing import Dict, Optional
+from typing import Dict
+from urllib.parse import urlparse
 
 import pulumi
 from paramiko.client import SSHClient
@@ -29,6 +31,8 @@ AVAILABLE_DISK_INTERFACES = {
     },
 }
 
+PROXMOX_ISO_BASE_LOCATION = "/var/lib/vz/template/iso"
+
 
 @pulumi.input_type
 class ProxmoxConnectionArgs(object):
@@ -49,11 +53,11 @@ class ProxmoxConnectionArgs(object):
         api_user: Input[str],
         ssh_user: Input[str],
         ssh_port: Input[int] = 22,
-        ssh_password: Optional[Input[str]] = None,
-        ssh_private_key: Optional[Input[str]] = None,
-        api_token_name: Optional[Input[str]] = None,
-        api_token_value: Optional[Input[str]] = None,
-        api_password: Optional[Input[str]] = None,
+        ssh_password: Input[str] = None,
+        ssh_private_key: Input[str] = None,
+        api_token_name: Input[str] = None,
+        api_token_value: Input[str] = None,
+        api_password: Input[str] = None,
         api_verify_ssl: Input[bool] = False,
     ) -> None:
         self.host = host
@@ -101,7 +105,7 @@ class ProxmoxConnection:
 
         # Generate a proxmoxer connection
         if self.api_token_name is not None and self.api_token_value is not None:
-            self.proxmax_api = ProxmoxAPI(
+            self.proxmox_api = ProxmoxAPI(
                 host=self.host,
                 user=self.api_user,
                 token_name=self.api_token_name,
@@ -109,7 +113,7 @@ class ProxmoxConnection:
                 verify_ssl=self.api_verify_ssl,
             )
         elif self.api_password is not None:
-            self.proxmax_api = ProxmoxAPI(
+            self.proxmox_api = ProxmoxAPI(
                 host=self.host,
                 user=self.api_user,
                 password=self.api_password,
@@ -130,6 +134,12 @@ class ProxmoxConnection:
     def __del__(self):
         if self.proxmox_ssh is not None:
             self.proxmox_ssh.close()
+
+    def install_app_via_apt_get(self, applications: str):
+        return
+
+    def uninstall_app_via_apt_get(self, applications: str):
+        return
 
     def create_user(
         self, node_name: str, username: str, role: str = "Administrator"
@@ -180,15 +190,114 @@ class ProxmoxConnection:
         print(delete_token)
         return
 
+    def add_ssh_key_to_user(self, username: str, key: str):
+        return
+
+    def remove_ssh_key_from_user(self, username: str, key: str):
+        return
+
+    def add_user_to_sudoers(self, username: str):
+        # Double check sudo is installed
+
+        # Add user
+        return
+
+    def download_iso_image(self, url: str) -> str:
+        # Double check sudo is installed
+
+        # If local_iso_name not given, extract it from the URL
+        parsed_url = urlparse(url)
+        download_image_name = os.path.basename(parsed_url.path)
+
+        # Figure out what the final local_image_name will be
+        gzip_compressed = False
+        zip_compressed = False
+        if download_image_name.endswith(".gz"):
+            local_image_name = download_image_name.removesuffix(".gz")
+            gzip_compressed = True
+        elif download_image_name.endswith(".zip"):
+            local_image_name = download_image_name.removesuffix(".zip")
+            zip_compressed = True
+
+        # Double check the local name ends with .iso or .img
+        if not local_image_name.endswith(".iso") or local_image_name.endswith(".img"):
+            raise Exception(f"Image is not an .iso or .img {local_image_name}")
+
+        # Check if the image is already present
+        command_to_run = f'[[ -f "{PROXMOX_ISO_BASE_LOCATION}/{local_image_name}" ]] && echo "1" || echo "";'
+        detect_file = self.proxmox_ssh.exec_command(command_to_run)
+        iso_exists = bool(detect_file[1].read().decode("ascii").strip())
+        print(
+            f"Image file: {PROXMOX_ISO_BASE_LOCATION}/{local_image_name} - EXISTS: {iso_exists}"
+        )
+        # If image already exists, nothing to do
+        if iso_exists:
+            return local_image_name
+
+        # Download the file to "/tmp/"
+        print(f"Downloading (start): {url}")
+        download_file = self.proxmox_ssh.exec_command(
+            f"wget --continue --output-document=/tmp/{download_image_name} {url}"
+        )
+        download_file_output = download_file[1].read().decode("ascii").strip("\n")
+        print(f"Downloading (end): {url}")
+        print(download_file_output)
+
+        uncompress_file = ""
+        if gzip_compressed:
+            uncompress_file = self.proxmox_ssh.exec_command(
+                f"gzip -dkf /tmp/{download_image_name}"
+            )
+            uncompress_file = uncompress_file[1].read().decode("ascii").strip("\n")
+        elif zip_compressed:
+            uncompress_file = self.proxmox_ssh.exec_command(
+                f"gzip -dkf /tmp/{download_image_name}"
+            )
+            uncompress_file = uncompress_file[1].read().decode("ascii").strip("\n")
+        print(uncompress_file)
+
+        # Move the file to the iso folder
+        print(
+            f"Moving (start): /tmp/{local_image_name} to: {PROXMOX_ISO_BASE_LOCATION}/{local_image_name}"
+        )
+        mv_file = self.proxmox_ssh.exec_command(
+            f"sudo mv /tmp/{local_image_name} {PROXMOX_ISO_BASE_LOCATION}/{local_image_name}"
+        )
+        mv_file = mv_file[1].read().decode("ascii").strip("\n")
+        print(mv_file)
+        print(
+            f"Moving (end): /tmp/{local_image_name} to: {PROXMOX_ISO_BASE_LOCATION}/{local_image_name}"
+        )
+        return local_image_name
+
+    def remove_iso_image(self, local_image_name: str):
+        # Check if the is present (it could have been deleted)
+        command_to_run = f'[[ -f "{PROXMOX_ISO_BASE_LOCATION}/{local_image_name}" ]] && echo "1" || echo "";'
+        detect_file = self.proxmox_ssh.exec_command(command_to_run)
+        iso_exists = bool(detect_file[1].read().decode("ascii").strip())
+        print(
+            f"Image file: {PROXMOX_ISO_BASE_LOCATION}/{local_image_name} - EXISTS: {iso_exists}"
+        )
+
+        # Remove the iso file
+        if iso_exists:
+            rm_file = self.proxmox_ssh.exec_command(
+                f"sudo rm {PROXMOX_ISO_BASE_LOCATION}/{local_image_name}"
+            )
+            rm_file = rm_file[1].read().decode("ascii").strip("\n")
+            print(rm_file)
+
+        return
+
     def check_node_exists(self, node_name: str) -> bool:
         # Loop on the nodes and see if we found it
-        for curr_node in self.proxmax_api.nodes.get():
+        for curr_node in self.proxmox_api.nodes.get():
             if curr_node.get("node") == node_name:
                 return True
         return False
 
     def check_vm_exists(self, node_name: str, vm_id: int):
-        for vm in self.proxmax_api.nodes(node_name).qemu.get():
+        for vm in self.proxmox_api.nodes(node_name).qemu.get():
             if vm.get("vmid") == vm_id:
                 return True
         return False
@@ -208,7 +317,7 @@ class ProxmoxConnection:
         return guest_installed
 
     def qemu_guest_agent_installed(self, node_name: str, vm_id: int) -> bool:
-        vm_config_results = self.proxmax_api(
+        vm_config_results = self.proxmox_api(
             f"/nodes/{node_name}/qemu/{vm_id}/config"
         ).get()
         guest_installed = bool(vm_config_results.get("agent", 0))
@@ -220,7 +329,7 @@ class ProxmoxConnection:
             raise Exception(f"VM {vm_id} doesn't exist on the proxmox cluster")
 
         # Start the VM
-        self.proxmax_api(f"/nodes/{node_name}/qemu/{vm_id}/status/start").post()
+        self.proxmox_api(f"/nodes/{node_name}/qemu/{vm_id}/status/start").post()
         # self.proxmox_ssh.exec_command(f"qm start {vm_id}")
 
         # Wait for the VM to start
@@ -237,7 +346,7 @@ class ProxmoxConnection:
         if not self.qemu_guest_agent_installed(node_name=node_name, vm_id=vm_id):
             raise Exception("QEMU Guest agent must be installed for this to work")
 
-        result = self.proxmax_api(
+        result = self.proxmox_api(
             f"/nodes/{node_name}/qemu/{vm_id}/agent/network-get-interfaces"
         ).get()
         ip_infos = result["result"]
@@ -257,13 +366,13 @@ class ProxmoxConnection:
         return ip_address
 
     def check_drive_exists(self, node_name: str, drive_id: str):
-        for curr_drive in self.proxmax_api.nodes(node_name).disks.list.get():
+        for curr_drive in self.proxmox_api.nodes(node_name).disks.list.get():
             if curr_drive.get("by_id_link") == f"/dev/disk/by-id/{drive_id}":
                 return True
         return False
 
     def find_available_disk_interfaces(self, node_name: str, vm_id: int):
-        devices = self.proxmax_api(f"nodes/{node_name}/qemu/{vm_id}/config").get()
+        devices = self.proxmox_api(f"nodes/{node_name}/qemu/{vm_id}/config").get()
         existing_interfaces = {}
         for curr_interface in list(AVAILABLE_DISK_INTERFACES.keys()):
             existing_interfaces[curr_interface] = []
@@ -326,7 +435,7 @@ class ProxmoxConnection:
         )
 
         # Check the device hasn't already been added
-        devices = self.proxmax_api(f"nodes/{node_name}/qemu/{vm_id}/config").get()
+        devices = self.proxmox_api(f"nodes/{node_name}/qemu/{vm_id}/config").get()
         for key, value in devices.items():
             if value == f"/dev/disk/by-id/{drive_id}":
                 raise Exception(
@@ -352,7 +461,7 @@ class ProxmoxConnection:
         return results
 
     def is_hardware_present(self, node_name, vm_id, hardware_device) -> bool:
-        devices = self.proxmax_api(f"nodes/{node_name}/qemu/{vm_id}/config").get()
+        devices = self.proxmox_api(f"nodes/{node_name}/qemu/{vm_id}/config").get()
         result = False
         if hardware_device in devices.keys():
             result = True

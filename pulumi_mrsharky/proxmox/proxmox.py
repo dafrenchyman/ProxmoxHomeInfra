@@ -1,18 +1,16 @@
 import json
 import os
 import re
+from typing import Any
 
 import pulumi
 import pulumi_command
 import pulumi_tls
-from pulumi import Output
+from pulumi import Input, Output
+from pulumi.dynamic import CreateResult, ResourceProvider, UpdateResult
 
 from home_infra.utils.pulumi_extras import PulumiExtras
-from pulumi_mrsharky.proxmox.get_ip_of_vm import GetIpOfVm, GetIpOfVmArgs
-from pulumi_mrsharky.proxmox.proxmox_connection import ProxmoxConnectionArgs
-from pulumi_mrsharky.proxmox.start_vm import StartVm, StartVmArgs
 from pulumi_mrsharky.remote import RunCommandsOnHost
-from pulumi_mrsharky.remote.save_file_on_remote_host import SaveFileOnRemoteHost
 
 IOMMU_GRUB = {
     "intel": "quiet intel_iommu=on iommu=pt",
@@ -46,79 +44,86 @@ i915""",
 }
 
 
-class Proxmox:
+class ProxmoxArgs(object):
+    proxmox_ip: Input[str]
+    proxmox_pass: Input[str]
+    node_name: Input[str]
+    private_key: Input[pulumi_tls.PrivateKey]
+    remove_enterprise_repo: Input[bool]
+    proxmox_pulumi_username: Input[str]
+
     def __init__(
         self,
         proxmox_ip: str,
         proxmox_pass: str,
-        cpu: str = "intel",
-        gpu: str = "nvidia",
+        private_key: pulumi_tls.PrivateKey,
+        remove_enterprise_repo: bool = False,
+        proxmox_pulumi_username: str = "pulumi",
     ) -> None:
-        """
-        Sources:
-        - https://forum.proxmox.com/threads/pci-gpu-passthrough-on-proxmox-ve-8-installation-and-configuration.130218/
-        - https://www.youtube.com/watch?v=4G9d5COhOvI&t=19s
-        - https://registry.terraform.io/providers/bpg/proxmox/latest/docs
-        :param proxmox_ip:
-        :param proxmox_pass:
-        """
-        self.cpu = cpu
-        self.gpu = gpu
         self.proxmox_ip = proxmox_ip
         self.proxmox_pass = proxmox_pass
-        self.current_path = os.path.dirname(os.path.abspath(__file__))
-
-        #
-        self.proxmox_private_key_file = "~/.ssh/proxmox_private_key.pem"
+        self.private_key = private_key
+        self.remove_enterprise_repo = remove_enterprise_repo
+        self.proxmox_pulumi_username = proxmox_pulumi_username
         return
 
-    def run(self) -> None:
-        # Create a new TLS private key
-        self.private_key = pulumi_tls.PrivateKey(
-            resource_name="proxmoxPrivateKey", algorithm="RSA", rsa_bits=4096
+
+class ResourceProviderProxmox(ResourceProvider):
+    def _process_inputs(self, props) -> ProxmoxArgs:
+        proxmox_args = ProxmoxArgs(
+            proxmox_ip=props.get("proxmox_ip"),
+            proxmox_pass=props.get("proxmox_pass"),
+            private_key=props.get("private_key"),
+            remove_enterprise_repo=bool(props.get("remove_enterprise_repo")),
+            proxmox_pulumi_username=props.get("proxmox_pulumi_username"),
         )
+        return proxmox_args
 
-        # Save the private key to temporary file
-        # self.private_key.private_key_pem.apply(
-        #     lambda private_key_pem: Proxmox.text_to_file(
-        #         text=private_key_pem, filename=self.proxmox_private_key_file
-        #     )
-        # )
+    def create(self, props) -> CreateResult:
+        # Get the input arguments
+        arguments = self._process_inputs(props)
 
-        # Export the private key and public key
-        pulumi.export("private_key", self.private_key.private_key_pem)
-        pulumi.export("public_key", self.private_key.public_key_openssh)
+        # Create a unique_id
+        id = "something"
 
         # Remove Enterprise Repo
-        self._remove_enterprise_repo()
+        if arguments.remove_enterprise_repo:
+            self.remove_enterprise_repo = self._remove_enterprise_repo(arguments)
 
         # Setup pulumi user
-        self._setup_pulumi_user()
-
-        # Setup IOMMU for GPU Passthrough
-        self._setup_iommu()
+        self.setup_pulumi_user = self._setup_pulumi_user(id=id, arguments=arguments)
 
         # Setup API Token
-        self._setup_api_token()
+        self._setup_api_token(
+            node_name=self.node_name, username=self.proxmox_pulumi_username
+        )
 
-        # Setup Ubuntu Cloud Init image
-        self._create_ubuntu_cloud_init_images()
+        results = {
+            "node_name": arguments.node_name,
+            "vm_id": arguments.vm_id,
+            "wait": arguments.wait,
+        }
 
-        # Setup Nixos Cloud Init image
-        self._create_nixos_cloud_init_images()
+        # return proxmox_connection.host, results
 
-        self._create_nixos_samba_server()
+        return CreateResult(id_=id, outs=results)
 
+    def delete(self, id: str, props: Any) -> None:
         return
 
-    def _remove_enterprise_repo(self) -> None:
-        self.remove_enterprise_repo = PulumiExtras.run_command_on_remote_host(
+    def update(self, id: str, old_props: Any, new_props: Any) -> UpdateResult:
+        self.delete(id=id, props=old_props)
+        _, results = self._common_create(new_props)
+        return UpdateResult(outs=results)
+
+    def _remove_enterprise_repo(self, arguments: ProxmoxArgs) -> None:
+        remove_enterprise_repo = PulumiExtras.run_command_on_remote_host(
             resource_name="ProxmoxRemoveEnterpriseRepo",
             connection=pulumi_command.remote.ConnectionArgs(
-                host=self.proxmox_ip,
+                host=arguments.proxmox_ip,
                 port=22,
                 user="root",
-                password=self.proxmox_pass,
+                password=arguments.proxmox_pass,
             ),
             create=(
                 "sed -i 's/deb https/# deb https/g' /etc/apt/sources.list.d/pve-enterprise.list && "
@@ -128,80 +133,164 @@ class Proxmox:
                 "sed -i 's/# deb https/deb https/g' /etc/apt/sources.list.d/pve-enterprise.list && "
                 "sed -i 's/# deb https/deb https/g' /etc/apt/sources.list.d/ceph.list "
             ),
+            opts=pulumi.ResourceOptions(depends_on=[arguments.private_key]),
         )
-        return
+        return remove_enterprise_repo
 
-    def _setup_pulumi_user(self) -> None:
+    def _setup_pulumi_user(self, id: str, arguments: ProxmoxArgs) -> None:
         proxmox_connection = pulumi_command.remote.ConnectionArgs(
-            host=self.proxmox_ip,
+            host=arguments.proxmox_ip,
             port=22,
             user="root",
-            password=self.proxmox_pass,
+            password=arguments.proxmox_pass,
         )
 
         # Install sudo
-        self.install_sudo = PulumiExtras.run_command_on_remote_host(
-            resource_name="ProxmoxInstallSudo",
+        install_sudo = PulumiExtras.run_command_on_remote_host(
+            resource_name=f"{id}InstallSudo",
             connection=proxmox_connection,
             create="apt-get update && apt-get install -y sudo",
             delete="apt-get purge -y sudo",
             opts=pulumi.ResourceOptions(
-                depends_on=[self.remove_enterprise_repo, self.private_key]
+                depends_on=[self.remove_enterprise_repo, arguments.private_key]
             ),
         )
 
         # Create the pulumi user
-        self.create_pulumi_user = PulumiExtras.run_command_on_remote_host(
-            resource_name="ProxmoxCreatePulumiUser",
+        create_pulumi_user = PulumiExtras.run_command_on_remote_host(
+            resource_name=f"{id}CreatePulumiUser",
             connection=proxmox_connection,
-            create="useradd --create-home -s /bin/bash pulumi",
-            delete="userdel --remove pulumi",
+            create=f"useradd --create-home -s /bin/bash {arguments.proxmox_pulumi_username}",
+            delete=f"userdel --remove {arguments.proxmox_pulumi_username}",
             opts=pulumi.ResourceOptions(
-                depends_on=[self.private_key, self.install_sudo]
+                depends_on=[arguments.private_key, install_sudo]
             ),
         )
 
         # Add ssh key
-        self.add_pulumi_ssh_key = PulumiExtras.run_command_on_remote_host(
-            resource_name="ProxmoxAddSshKeyForPulumiUser",
+        add_pulumi_ssh_key = PulumiExtras.run_command_on_remote_host(
+            resource_name=f"{id}AddSshKeyForPulumiUser",
             connection=proxmox_connection,
-            create=self.private_key.public_key_openssh.apply(
+            create=arguments.private_key.public_key_openssh.apply(
                 lambda key: (
-                    "mkdir -p /home/pulumi/.ssh/ && "
-                    f"echo '{key}' >> /home/pulumi/.ssh/authorized_keys"
+                    f"mkdir -p /home/{arguments.proxmox_pulumi_username}/.ssh/ && "
+                    f"echo '{key}' >> /home/{arguments.proxmox_pulumi_username}/.ssh/authorized_keys"
                 )
             ),
             # TODO: Come up with good delete
             delete=None,
             opts=pulumi.ResourceOptions(
-                depends_on=[self.private_key, self.create_pulumi_user]
+                depends_on=[arguments.private_key, create_pulumi_user]
             ),
         )
 
         # Add pulumi to sudo
-        self.add_pulumi_to_sudo = PulumiExtras.run_command_on_remote_host(
-            resource_name="ProxmoxAddPulumiToSudo",
+        add_pulumi_to_sudo = PulumiExtras.run_command_on_remote_host(
+            resource_name=f"{id}AddPulumiToSudo",
             connection=proxmox_connection,
             create=(
                 "mkdir -p /etc/sudoers.d/ && "
-                "echo 'pulumi ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/pulumi && "
-                "chown root:root /etc/sudoers.d/pulumi && "
-                "chmod 440 /etc/sudoers.d/pulumi"
+                f"echo '{arguments.proxmox_pulumi_username} ALL=(ALL) NOPASSWD: ALL' > "
+                f"/etc/sudoers.d/{arguments.proxmox_pulumi_username} && "
+                f"chown root:root /etc/sudoers.d/{arguments.proxmox_pulumi_username} && "
+                f"chmod 440 /etc/sudoers.d/{arguments.proxmox_pulumi_username}"
             ),
-            delete=("rm /etc/sudoers.d/pulumi"),
+            delete=(f"rm /etc/sudoers.d/{arguments.proxmox_pulumi_username}"),
             opts=pulumi.ResourceOptions(
-                depends_on=[self.private_key, self.add_pulumi_ssh_key]
+                depends_on=[arguments.private_key, add_pulumi_ssh_key]
             ),
         )
 
         # Reboot
-        self.reboot_after_sudo = PulumiExtras.reboot_remote_host(
-            resource_name="ProxmoxRebootAfterSudo",
+        reboot_after_sudo = PulumiExtras.reboot_remote_host(
+            resource_name=f"{id}RebootAfterSudo",
             connection=proxmox_connection,
             opts=pulumi.ResourceOptions(
-                depends_on=[self.private_key, self.add_pulumi_to_sudo],
+                depends_on=[arguments.private_key, add_pulumi_to_sudo],
             ),
         )
+        return reboot_after_sudo
+
+    def _setup_api_token(self, id: str, arguments: ProxmoxArgs) -> None:
+        pulumi_connection = pulumi_command.remote.ConnectionArgs(
+            host=arguments.proxmox_ip,
+            port=22,
+            user=arguments.proxmox_pulumi_username,
+            private_key=arguments.private_key.private_key_pem,
+        )
+
+        # Add a pulumi user
+        create_api_user = PulumiExtras.run_command_on_remote_host(
+            resource_name=f"{id}CreatePulumiApiUser{arguments.node_name}",
+            connection=pulumi_connection,
+            create=(
+                f"sudo pveum user add {arguments.proxmox_pulumi_username}@{arguments.node_name} && "
+                f"sudo pveum aclmod / -user {arguments.proxmox_pulumi_username}@{arguments.node_name} "
+                + "-role Administrator"
+            ),
+            delete=f"sudo pveum user delete {arguments.proxmox_pulumi_username}@{arguments.node_name}",
+            opts=pulumi.ResourceOptions(parent=self.setup_pulumi_user, depends_on=[]),
+        )
+
+        # Create token
+        create_token = PulumiExtras.run_command_on_remote_host(
+            resource_name=f"{id}CreatePulumiApiToken",
+            connection=pulumi_connection,
+            create=(
+                f"sudo pveum user token add {arguments.proxmox_pulumi_username}@{arguments.node_name} "
+                + "provider --privsep=0 --expire 0 --output-format json"
+            ),
+            delete=f"sudo pveum user token remove {arguments.proxmox_pulumi_username}@{arguments.node_name} provider",
+            opts=pulumi.ResourceOptions(parent=create_api_user, depends_on=[]),
+        )
+        pulumi_api_token = Proxmox.get_api_token(create_token.stdout)
+
+        pulumi.export(f"{id}_API_TOKEN", pulumi_api_token)
+
+        return
+
+
+class Proxmox:
+    def __init__(
+        self,
+        resource_name: str,
+        proxmox_ip: str,
+        proxmox_pass: str,
+        node_name: str,
+        private_key: pulumi_tls.PrivateKey,
+        remove_enterprise_repo: bool = False,
+        proxmox_pulumi_username: str = "pulumi",
+    ) -> None:
+        """
+        Sources:
+        - https://forum.proxmox.com/threads/pci-gpu-passthrough-on-proxmox-ve-8-installation-and-configuration.130218/
+        - https://www.youtube.com/watch?v=4G9d5COhOvI&t=19s
+        - https://registry.terraform.io/providers/bpg/proxmox/latest/docs
+        :param proxmox_ip:
+        :param proxmox_pass:
+        """
+
+        # Save all the input arguments
+        self.proxmox_ip = proxmox_ip
+        self.proxmox_pass = proxmox_pass
+        self.node_name = node_name
+        self.private_key = private_key
+        self.remove_enterprise_repo = remove_enterprise_repo
+        self.proxmox_pulumi_username = proxmox_pulumi_username
+
+        return
+
+    def run(self) -> None:
+
+        # Setup IOMMU for GPU Passthrough
+        self._setup_iommu()
+
+        # Setup Ubuntu Cloud Init image
+        self._create_ubuntu_cloud_init_images()
+
+        # Setup Nixos Cloud Init image
+        self._create_nixos_cloud_init_images()
+
         return
 
     def _setup_iommu(self) -> None:
@@ -384,45 +473,6 @@ class Proxmox:
 
         return
 
-    def _setup_api_token(self) -> None:
-        pulumi_connection = pulumi_command.remote.ConnectionArgs(
-            host=self.proxmox_ip,
-            port=22,
-            user="pulumi",
-            private_key=self.private_key.private_key_pem,
-        )
-
-        # Add a pulumi user
-        self.create_api_user = PulumiExtras.run_command_on_remote_host(
-            resource_name="proxmoxCreatePulumiApiUser",
-            connection=pulumi_connection,
-            create=(
-                "sudo pveum user add pulumi@pve && "
-                "sudo pveum aclmod / -user pulumi@pve -role Administrator"
-            ),
-            delete="sudo pveum user delete pulumi@pve",
-            opts=pulumi.ResourceOptions(
-                parent=self.reboot_after_isolating_gpu, depends_on=[]
-            ),
-        )
-
-        # Create token
-
-        self.create_token = PulumiExtras.run_command_on_remote_host(
-            resource_name="proxmoxCreatePulumiApiToken",
-            connection=pulumi_connection,
-            create=(
-                "sudo pveum user token add pulumi@pve provider --privsep=0 --expire 0 --output-format json"
-            ),
-            delete="sudo pveum user token remove pulumi@pve provider",
-            opts=pulumi.ResourceOptions(parent=self.create_api_user, depends_on=[]),
-        )
-        self.pulumi_api_token = Proxmox.get_api_token(self.create_token.stdout)
-
-        pulumi.export("API_TOKEN_2", self.pulumi_api_token)
-
-        return
-
     def _create_ubuntu_cloud_init_images(self):
         pulumi_connection = pulumi_command.remote.ConnectionArgs(
             host=self.proxmox_ip,
@@ -513,180 +563,6 @@ class Proxmox:
                     ]
                 ),
             )
-
-    def _create_nixos_samba_server(
-        self,
-        memory: int = 16384,
-        cpu_cores: int = 4,
-        disk_space_in_gb: int = 1000,
-        vm_id: int = 300,
-    ):
-        pulumi_connection = pulumi_command.remote.ConnectionArgs(
-            host=self.proxmox_ip,
-            port=22,
-            user="pulumi",
-            private_key=self.private_key.private_key_pem,
-        )
-
-        # Save file with private key on proxmox for use into this image
-        key_path = "/home/pulumi/proxmox_key.pem"
-        save_key = SaveFileOnRemoteHost(
-            resource_name="nixos_ssh_key",
-            connection=pulumi_connection,
-            file_contents=self.private_key.public_key_openssh,
-            file_location=key_path,
-            opts=pulumi.ResourceOptions(
-                parent=self.create_nixos_cloud_init_image,
-                depends_on=[
-                    self.create_nixos_cloud_init_image,
-                    self.reboot_after_isolating_gpu,
-                ],
-            ),
-        )
-
-        script = [
-            # Clone the nixos template
-            f'qm clone 9001 {vm_id} --name nixos-fileserver --description "Nixos Fileserver" --full 1',
-            # Set options on the template
-            f"qm set {vm_id} --kvm 1 --ciuser ops",
-            f"qm set {vm_id} --cores {cpu_cores}",
-            f"qm set {vm_id} --balloon 0 --memory {memory}",
-            f"qm set {vm_id} --scsi0 local-lvm:vm-{vm_id}-disk-0,ssd=1",
-            f"qm set {vm_id} --agent 1",
-            f"qm set {vm_id} --onboot 1"
-            f"qm disk resize {vm_id} scsi0 {disk_space_in_gb}G",
-            # Set the PCI card (notice it's 0000:02:00 and NOT 0000:02:00.0)
-            # Serial Attached SCSI controller: Broadcom / LSI SAS2008 PCI-Express Fusion-MPT SAS-2 [Falcon] (rev 03)
-            f"qm set {vm_id} --hostpci0 host=0000:02:00,rombar=1",
-            # Set the SSH key
-            f"qm set {vm_id} --sshkeys {key_path}",
-        ]
-
-        self.create_nixos_smb_vm = RunCommandsOnHost(
-            resource_name="proxmoxCreateNixosSambaServer",
-            connection=pulumi_connection,
-            create=script,
-            delete=[f"qm destroy {vm_id}"],
-            update=[f"qm destroy {vm_id}"] + script,
-            use_sudo=True,
-            opts=pulumi.ResourceOptions(
-                parent=save_key,
-                depends_on=[
-                    self.create_nixos_cloud_init_image,
-                    # save_key,
-                    self.reboot_after_isolating_gpu,
-                ],
-            ),
-        )
-
-        # Start VM
-        proxmox_connection_args = ProxmoxConnectionArgs(
-            host=self.proxmox_ip,
-            api_user="pulumi@pve",
-            ssh_user="pulumi",
-            ssh_port=22,
-            ssh_private_key=self.private_key.private_key_pem,
-            api_token_name="provider",
-            api_token_value=self.pulumi_api_token,
-            api_verify_ssl=False,
-        )
-
-        # Start the VM and pause for 60 seconds
-        self.nixos_samba_server_start_vm = StartVm(
-            resource_name="StartNixOsSambaServer",
-            start_vm_args=StartVmArgs(
-                proxmox_connection_args=proxmox_connection_args,
-                node_name="pve",
-                vm_id=vm_id,
-                wait=60,
-            ),
-            opts=pulumi.ResourceOptions(
-                parent=self.create_nixos_smb_vm,
-                depends_on=[
-                    # self.create_nixos_smb_vm,
-                ],
-            ),
-        )
-
-        # Get IP of VM
-        self.nixos_samba_server_ip = GetIpOfVm(
-            resource_name="GetIpOfNixosSambaServer",
-            get_ip_of_vm_args=GetIpOfVmArgs(
-                proxmox_connection_args=proxmox_connection_args,
-                node_name="pve",
-                vm_id=vm_id,
-            ),
-            opts=pulumi.ResourceOptions(
-                parent=self.nixos_samba_server_start_vm,
-                depends_on=[
-                    self.nixos_samba_server_start_vm,
-                ],
-            ),
-        )
-
-        pulumi.export("nixos_samba_ip", self.nixos_samba_server_ip.ip)
-
-        # Create ssh connection to nix samba server
-        nix_samba_connection = pulumi_command.remote.ConnectionArgs(
-            host=self.nixos_samba_server_ip.ip,
-            port=22,
-            user="ops",
-            private_key=self.private_key.private_key_pem,
-        )
-
-        # update the nix-channel on the VM
-        script = [
-            "nix-channel --add https://nixos.org/channels/nixos-23.11 nixos",
-            "nix-channel --update",
-        ]
-        self.nixos_samba_update_channel = RunCommandsOnHost(
-            resource_name="nixSambaUpdateChannel",
-            connection=nix_samba_connection,
-            create=script,
-            use_sudo=True,
-            opts=pulumi.ResourceOptions(
-                parent=self.nixos_samba_server_ip,
-                depends_on=[
-                    self.private_key,
-                ],
-            ),
-        )
-
-        # Save the configuration.nix file
-        configuration_nix_file = f"{os.path.dirname(__file__)}/../../pulumi_mrsharky/nixos_samba/configuration.nix"
-        with open(configuration_nix_file, "r") as file:
-            configuration_nix = file.read()
-        configuration_path = "/etc/nixos/configuration.nix"
-        self.nixos_samba_configuration_nix = SaveFileOnRemoteHost(
-            resource_name="nixSambaConfigurationNix",
-            connection=nix_samba_connection,
-            file_contents=configuration_nix,
-            file_location=configuration_path,
-            opts=pulumi.ResourceOptions(
-                parent=self.nixos_samba_update_channel,
-                depends_on=[
-                    self.private_key,
-                ],
-            ),
-        )
-
-        # Rebuild switch
-        self.nixos_samba_update_channel = RunCommandsOnHost(
-            resource_name="nixSambaRebuildSwitch",
-            connection=nix_samba_connection,
-            create=[
-                "nixos-rebuild switch -I nixos-config=/etc/nixos/configuration.nix"
-            ],
-            use_sudo=True,
-            opts=pulumi.ResourceOptions(
-                parent=self.nixos_samba_server_ip,
-                depends_on=[
-                    self.private_key,
-                ],
-            ),
-        )
-
-        return
 
     @staticmethod
     def get_api_token(input: Output) -> pulumi.Output[str]:

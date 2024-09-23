@@ -1,4 +1,18 @@
 config:
+  # Global Settings
+  proxmox:timezone: "America/Los_Angeles"
+  # Router config (hardware passthrough for this device
+  # https://www.amazon.com/Qotom-Q20331G9-Computer-Ethernet-Firewall/dp/B0CWD4S2FL
+  proxmox:proxmox_router_ip: "192.168.10.20"
+  proxmox:proxmox_router_pass: "proxmox_password"
+  proxmox:proxmox_router_pfsense_lan_ipv4_ip: "192.168.10.1"
+  proxmox:proxmox_router_pfsense_lan_ipv4_subnet: "24"
+  proxmox:proxmox_router_pfsense_lan_ipv4_dhcp_start_address: "192.168.10.100"
+  proxmox:proxmox_router_pfsense_lan_ipv4_dhcp_end_address: "192.168.10.200"
+  proxmox:proxmox_router_pfsense_wan_passthrough: "0000:08:00" # Port 5
+  proxmox:proxmox_router_pfsense_lan_passthrough: "0000:07:00" # Port 2
+  proxmox:proxmox_router_pfsense_admin_password: "new_pfsense_pass" # pragma: allowlist secret
+  # Old stuff (will work this back in)
   proxmox:proxmox_ip: "192.168.10.10"
   proxmox:proxmox_pass: "mypassword"
   proxmox:samba_pass: "mypassword"

@@ -3,12 +3,154 @@ from typing import List, Optional
 
 import pulumi
 import pulumi_command
+from pulumi import Resource
 from pulumi_tls import PrivateKey
 
+from home_infra.utils.pulumi_extras import PulumiExtras
+from pulumi_mrsharky.nixos.create_config import CreateConfig, CreateConfigArgs
 from pulumi_mrsharky.proxmox.get_ip_of_vm import GetIpOfVm, GetIpOfVmArgs
 from pulumi_mrsharky.proxmox.proxmox_connection import ProxmoxConnectionArgs
 from pulumi_mrsharky.proxmox.start_vm import StartVm, StartVmArgs
 from pulumi_mrsharky.remote import RunCommandsOnHost, SaveFileOnRemoteHost
+
+
+class NixosBase:
+    def __init__(
+        self,
+        resource_name_prefix: str,
+        pulumi_connection: pulumi_command.remote.ConnectionArgs,
+        parent: Optional[Resource],
+    ):
+        self.resource_name_prefix = resource_name_prefix
+        self.pulumi_connection = pulumi_connection
+        self.parent = parent
+
+        # Setup glances
+        self._set_glances()
+        return
+
+    def _set_glances(self):
+        ####################################
+        # Upload Glances with Prometheus
+        ####################################
+        with open(
+            f"{os.path.dirname(__file__)}/glances_with_prometheus/default.nix", "r"
+        ) as file:
+            glances_default_nix = file.read()
+        self.glances_file_default = SaveFileOnRemoteHost(
+            resource_name=f"{self.resource_name_prefix}_glances_default_nix",
+            connection=self.pulumi_connection,
+            file_contents=glances_default_nix,
+            file_location="/etc/nixos/glances_with_prometheus/default.nix",
+            use_sudo=True,
+            opts=pulumi.ResourceOptions(
+                parent=self.parent,
+                delete_before_replace=True,
+            ),
+        )
+
+        with open(
+            f"{os.path.dirname(__file__)}/glances_with_prometheus/service.nix", "r"
+        ) as file:
+            glances_default_nix = file.read()
+        self.glances_file_default = SaveFileOnRemoteHost(
+            resource_name=f"{self.resource_name_prefix}_glances_service_nix",
+            connection=self.pulumi_connection,
+            file_contents=glances_default_nix,
+            file_location="/etc/nixos/glances_with_prometheus/service.nix",
+            use_sudo=True,
+            opts=pulumi.ResourceOptions(
+                parent=self.parent,
+                delete_before_replace=True,
+            ),
+        )
+
+    def setup_kubernetes(
+        self,
+        host_name: str,
+        domain_name: str,
+        nameserver_ip: str,
+    ):
+        host_name = host_name.lower()
+        domain_name = domain_name.lower()
+
+        full_host_name = f"{host_name}.{domain_name}"
+
+        nix_cfg_file = f"{os.path.dirname(__file__)}/kubernetes/configuration.nix"
+        with open(nix_cfg_file, "r") as file:
+            configuration_nix = file.read()
+        # Place a password for the samba-user account
+        configuration_nix = configuration_nix.replace("{{HOSTNAME}}", host_name)
+        configuration_nix = configuration_nix.replace(
+            "{{KUBE_HOSTNAME}}", full_host_name
+        )
+        configuration_nix = configuration_nix.replace(
+            "{{HOST_IP}}", self.pulumi_connection.host
+        )
+        configuration_nix = configuration_nix.replace("{{NAMESERVER}}", nameserver_ip)
+
+        # Save the configuration.nix file
+        self.configuration_nix = self._upload_configuration_nix(
+            configuration_file_str=configuration_nix,
+        )
+
+        # Rebuild / switch
+        # self.nixos_samba_update_channel = RunCommandsOnHost(
+        self.nixos_samba_update_channel = PulumiExtras.run_commands_on_remote_host(
+            resource_name=f"{self.resource_name_prefix}_RebuildSwitch",
+            connection=self.pulumi_connection,
+            create=[
+                "echo 'Starting'",
+                "sudo nixos-rebuild switch -I nixos-config=/etc/nixos/configuration.nix",
+                "echo 'Finished'",
+            ],
+            update=[
+                "echo 'Starting'",
+                "sudo nixos-rebuild switch -I nixos-config=/etc/nixos/configuration.nix"
+                "echo 'Finished'",
+            ],
+            # use_sudo=True,
+            opts=pulumi.ResourceOptions(
+                parent=self.configuration_nix,
+                delete_before_replace=True,
+            ),
+        )
+
+        # Generate the "config file and return as string
+        create_config = CreateConfig(
+            resource_name=f"{self.resource_name_prefix}_CreateConfig",
+            create_config_args=CreateConfigArgs(
+                ssh_user=self.pulumi_connection.user,
+                ssh_port=int(self.pulumi_connection.port),
+                ssh_host=self.pulumi_connection.host,
+                kubectl_api_url=f"https://{full_host_name}:6443",
+                ssh_private_key=self.pulumi_connection.private_key,
+            ),
+            opts=pulumi.ResourceOptions(
+                parent=self.nixos_samba_update_channel,
+                delete_before_replace=True,
+            ),
+        )
+        pulumi.export("kubectl", create_config.kubectl_config)
+        return create_config
+
+    def _upload_configuration_nix(
+        self,
+        configuration_file_str: str,
+    ):
+        configuration_path = "/etc/nixos/configuration.nix"
+        nixos_samba_configuration_nix = SaveFileOnRemoteHost(
+            resource_name=f"{self.resource_name_prefix}_ConfigurationNix",
+            connection=self.pulumi_connection,
+            file_contents=configuration_file_str,
+            file_location=configuration_path,
+            use_sudo=True,
+            opts=pulumi.ResourceOptions(
+                parent=self.parent,
+                delete_before_replace=True,
+            ),
+        )
+        return nixos_samba_configuration_nix
 
 
 class NixosSambaServer:

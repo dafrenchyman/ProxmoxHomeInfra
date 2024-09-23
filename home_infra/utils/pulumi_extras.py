@@ -1,6 +1,6 @@
 import os
 import re
-from typing import Any, Mapping, Optional, Sequence, Union
+from typing import Any, List, Mapping, Optional, Sequence, Union
 
 import pulumi
 import pulumi_command
@@ -57,6 +57,42 @@ class PulumiExtras:
             opts=opts,
         )
         return create_file
+
+    @staticmethod
+    def run_commands_on_remote_host(
+        resource_name: str,
+        connection: pulumi.Input[pulumi.InputType[ConnectionArgs]],
+        create: List[Union[str, Output]],
+        delete: Optional[List[Union[str, Output]]] = None,
+        update: Optional[List[Union[str, Output]]] = None,
+        environment: Optional[pulumi.Input[Mapping[str, pulumi.Input[str]]]] = None,
+        stdin: Optional[pulumi.Input[str]] = None,
+        triggers: Optional[pulumi.Input[Sequence[Any]]] = None,
+        opts: Optional[pulumi.ResourceOptions] = None,
+    ) -> pulumi_command.remote.Command:
+        # Convert input statements to pulumi.Output
+        new_create = Output.all(*create).apply(lambda parts: " && ".join(parts))
+        if delete is not None:
+            new_delete = Output.all(*delete).apply(lambda parts: " && ".join(parts))
+        else:
+            new_delete = None
+        if update is not None:
+            new_update = Output.all(*update).apply(lambda parts: " && ".join(parts))
+        else:
+            new_update = None
+
+        result = PulumiExtras.run_command_on_remote_host(
+            resource_name=resource_name,
+            connection=connection,
+            create=new_create,
+            delete=new_delete,
+            update=new_update,
+            environment=environment,
+            stdin=stdin,
+            triggers=triggers,
+            opts=opts,
+        )
+        return result
 
     @staticmethod
     def run_command_on_remote_host(
@@ -124,9 +160,7 @@ class PulumiExtras:
             resource_name=f"{resource_name}Delay",
             create=f"sleep {seconds_to_wait_for_reboot}",
             opts=pulumi.ResourceOptions(
-                depends_on=[
-                    reboot_now,
-                ],
+                parent=reboot_now,
             ),
         )
 
@@ -135,9 +169,7 @@ class PulumiExtras:
             connection=connection,
             create="echo 'Server is back online'",
             opts=pulumi.ResourceOptions(
-                depends_on=[
-                    delay,
-                ],
+                parent=delay,
             ),
         )
         return check_back_up

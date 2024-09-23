@@ -9,37 +9,28 @@ from pulumi_mrsharky.proxmox.resource_provider_proxmox import ResourceProviderPr
 
 
 @pulumi.input_type
-class StartVmArgs(object):
+class AddIsoImageArgs(object):
     proxmox_connection_args: Input[ProxmoxConnectionArgs]
-    node_name: Input[str]
-    vm_id: Input[int]
-    wait: Input[int]
+    url: Input[str]
 
     def __init__(
         self,
-        proxmox_connection_args: ProxmoxConnectionArgs,
-        node_name: str,
-        vm_id: int,
-        wait: int = 30,
+        proxmox_connection_args: Input[ProxmoxConnectionArgs],
+        url: Input[str],
     ) -> None:
         self.proxmox_connection_args = proxmox_connection_args
-        self.node_name = node_name
-        self.vm_id = int(vm_id)
-        self.wait = int(wait)
+        self.url = url
         return
 
 
-class StartVmProvider(ResourceProviderProxmox):
-
-    def _process_inputs(self, props) -> StartVmArgs:
+class AddIsoImageProvider(ResourceProviderProxmox):
+    def _process_inputs(self, props) -> AddIsoImageArgs:
         # Proxmox connection args
         proxmox_connection_args = super()._process_inputs(props)
 
-        start_vm_args = StartVmArgs(
+        start_vm_args = AddIsoImageArgs(
             proxmox_connection_args=proxmox_connection_args,
-            node_name=props.get("node_name"),
-            vm_id=int(props.get("vm_id")),
-            wait=int(props.get("wait")),
+            url=props.get("url"),
         )
         return start_vm_args
 
@@ -51,17 +42,15 @@ class StartVmProvider(ResourceProviderProxmox):
             proxmox_connection_args=arguments.proxmox_connection_args
         )
 
-        # Start the VM
-        proxmox_connection.start_vm(
-            node_name=arguments.node_name,
-            vm_id=arguments.vm_id,
-            wait=arguments.wait,
+        # Download the image
+        local_image_name = proxmox_connection.download_iso_image(
+            url=arguments.url,
         )
 
         results = {
-            "node_name": arguments.node_name,
-            "vm_id": arguments.vm_id,
-            "wait": arguments.wait,
+            "url": arguments.url,
+            "local_image_name": local_image_name,
+            "proxmox_connection_args": arguments.proxmox_connection_args,
         }
 
         return proxmox_connection.host, results
@@ -71,6 +60,17 @@ class StartVmProvider(ResourceProviderProxmox):
         return CreateResult(id_=id, outs=results)
 
     def delete(self, id: str, props: Any) -> None:
+        print(props)
+        arguments = self._process_inputs(props)
+
+        # Set up the connection
+        proxmox_connection = self._create_proxmox_connection(
+            proxmox_connection_args=arguments.proxmox_connection_args
+        )
+        print("Getting local_image_name")
+        local_image_name = props.get("local_image_name")
+
+        proxmox_connection.remove_iso_image(local_image_name)
         return
 
     def update(self, id: str, old_props: Any, new_props: Any) -> UpdateResult:
@@ -79,21 +79,21 @@ class StartVmProvider(ResourceProviderProxmox):
         return UpdateResult(outs=results)
 
 
-class StartVm(Resource):
+class AddIsoImage(Resource):
     id: Output[str]
-    node_name: Output[str]
-    vm_id: Output[int]
-    wait: Output[int]
+    add_iso_image_args: Output[AddIsoImageArgs]
+    url: Output[int]
+    local_image_name: Output[str]
 
     def __init__(
         self,
         resource_name,
-        start_vm_args: StartVmArgs,
+        add_iso_image_args: AddIsoImageArgs,
         opts: Optional[ResourceOptions] = None,
     ):
-        full_args = {**vars(start_vm_args)}
+        full_args = {"local_image_name": None, **vars(add_iso_image_args)}
         super().__init__(
-            provider=StartVmProvider(),
+            provider=AddIsoImageProvider(),
             name=resource_name,
             props=full_args,
             opts=opts,
