@@ -25,9 +25,61 @@ class NixosBase:
         self.pulumi_connection = pulumi_connection
         self.parent = parent
 
+        # Copy over all potential services
+        self._copy_extra_services()
+
         # Setup glances
         self._set_glances()
         return
+
+    def _upload_local_file(
+        self, local_file: str, upload_location: str, resource_name_suffix: str
+    ):
+        with open(local_file, "r") as file:
+            glances_default_nix = file.read()
+        self.glances_file_default = SaveFileOnRemoteHost(
+            resource_name=f"{self.resource_name_prefix}_{resource_name_suffix}",
+            connection=self.pulumi_connection,
+            file_contents=glances_default_nix,
+            file_location=upload_location,
+            use_sudo=True,
+            opts=pulumi.ResourceOptions(
+                parent=self.parent,
+                delete_before_replace=True,
+            ),
+        )
+
+    def _copy_extra_services(self):
+        # extra_services/default.nix
+        self._upload_local_file(
+            local_file=f"{os.path.dirname(__file__)}/extra_services/default.nix",
+            upload_location="/etc/nixos/extra_services/default.nix",
+            resource_name_suffix="extra_services_default",
+        )
+
+        self._upload_local_file(
+            local_file=f"{os.path.dirname(__file__)}/extra_services/glances_default.nix",
+            upload_location="/etc/nixos/extra_services/glances_default.nix",
+            resource_name_suffix="extra_services_glances_default",
+        )
+
+        self._upload_local_file(
+            local_file=f"{os.path.dirname(__file__)}/extra_services/glances_service.nix",
+            upload_location="/etc/nixos/extra_services/glances_service.nix",
+            resource_name_suffix="extra_services_glances_service",
+        )
+
+        self._upload_local_file(
+            local_file=f"{os.path.dirname(__file__)}/extra_services/gow_wolf.nix",
+            upload_location="/etc/nixos/extra_services/gow_wolf.nix",
+            resource_name_suffix="extra_services_gow_wolf",
+        )
+
+        self._upload_local_file(
+            local_file=f"{os.path.dirname(__file__)}/extra_services/single_node_kube.nix",
+            upload_location="/etc/nixos/extra_services/single_node_kube.nix",
+            resource_name_suffix="extra_services_single_node_kube",
+        )
 
     def _set_glances(self):
         ####################################
@@ -79,7 +131,8 @@ class NixosBase:
         nix_cfg_file = f"{os.path.dirname(__file__)}/kubernetes/configuration.nix"
         with open(nix_cfg_file, "r") as file:
             configuration_nix = file.read()
-        # Place a password for the samba-user account
+
+        # Setup kubernetes config
         configuration_nix = configuration_nix.replace("{{HOSTNAME}}", host_name)
         configuration_nix = configuration_nix.replace(
             "{{KUBE_HOSTNAME}}", full_host_name

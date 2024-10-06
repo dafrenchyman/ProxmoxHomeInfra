@@ -50,7 +50,7 @@ class ProxmoxNixOS:
             f"sudo qm create {template_id} --memory 2048 --core 2 --cpu cputype=host,flags=+aes "
             + "--name nixos-23.11-kvm --net0 virtio,bridge=vmbr0",
             f"sudo qm importdisk {template_id} /var/lib/vz/template/iso/nixos-23.11-cloud-init.img "
-            + "{storage_volume_name}",
+            + f"{storage_volume_name}",
             f"sudo qm set {template_id} --scsihw virtio-scsi-pci --scsi0 {storage_volume_name}:vm-9001-disk-0",
             f"sudo qm set {template_id} --ide2 {storage_volume_name}:cloudinit",
             f"sudo qm set {template_id} --boot c --bootdisk scsi0",
