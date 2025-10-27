@@ -1,4 +1,5 @@
 import json
+import os
 from typing import Any, Optional, Sequence
 
 import pulumi
@@ -58,6 +59,12 @@ class ProxmoxBase(pulumi.ComponentResource):
         # Setup API Token
         self._setup_api_token()
 
+        # Build GPU bios
+        self._dump_gpu_bios()
+
+        # Setup a 2nd Network device
+        # self._setup_network_device()
+
         ###############################################
         # Enable IOMMU
         # NOTE: This will also reboot the machine.
@@ -103,6 +110,9 @@ class ProxmoxBase(pulumi.ComponentResource):
             private_key=self.private_key.private_key_pem,
         )
 
+        # Download GPU Roms
+        self._copy_gpu_rom_images(resource_name_prefix, self.pulumi_connection)
+
         # clean it all up
         outputs = {
             "proxmox_ip": self.proxmox_ip,
@@ -117,6 +127,205 @@ class ProxmoxBase(pulumi.ComponentResource):
         self.register_outputs(outputs)
 
         return
+
+    def _dump_gpu_bios(self) -> None:
+        """
+        github repo: https://github.com/isc30/ryzen-gpu-passthrough-proxmox
+        """
+        pulumi_connection = pulumi_command.remote.ConnectionArgs(
+            host=self.proxmox_ip,
+            port=22,
+            user=self.proxmox_api_username,
+            private_key=self.private_key.private_key_pem,
+        )
+
+        # Install build-essential
+        create_stmt = ["sudo apt-get update", "sudo apt-get install build-essential -y"]
+        create_stmt = " && ".join(create_stmt)
+
+        _install_build_essentials = PulumiExtras.run_command_on_remote_host(  # noqa: F841
+            resource_name=f"{self.resource_name_prefix}ProxmoxInstallBuildEssential",
+            connection=pulumi_connection,
+            create=create_stmt,
+            opts=pulumi.ResourceOptions(
+                parent=self.sub_component_add_pulumi_to_sudo,
+                depends_on=[self.sub_component_create_pulumi_user],
+                delete_before_replace=True,
+            ),
+        )
+
+        vbios_file = f"{os.path.dirname(__file__)}/vbios.c"
+        with open(vbios_file, "r") as file:
+            vbios_file_contents = file.read()
+
+            save_vbios_file = PulumiExtras.save_file_on_remote_host(
+                resource_name=f"{self.resource_name_prefix}_CopyVbiosC",
+                connection=pulumi_connection,
+                file_contents=vbios_file_contents,
+                file_location="/tmp/vbios.c",
+            )
+
+            build_vbios_stmt = [
+                "cd /tmp",
+                "gcc vbios.c -o vbios",
+                "sudo ./vbios",
+                "sudo mv vbios_*.bin /usr/share/kvm/vbios_custom.bin",
+            ]
+            build_vbios_stmt = " && ".join(build_vbios_stmt)
+            _build_vbios = PulumiExtras.run_command_on_remote_host(  # noqa: F841
+                resource_name=f"{self.resource_name_prefix}_GetVbios",
+                connection=pulumi_connection,
+                create=build_vbios_stmt,
+                opts=pulumi.ResourceOptions(
+                    parent=self.sub_component_add_pulumi_to_sudo,
+                    depends_on=[save_vbios_file],
+                    delete_before_replace=True,
+                ),
+            )
+
+        return
+
+    def _copy_gpu_rom_images(self, resource_name_prefix, pulumi_connection):
+        """
+        Copy over GPU rom files for iGPU passthrough
+        """
+        # Download gpu roms
+        # https://github.com/isc30/ryzen-gpu-passthrough-proxmox
+        download_script = []
+        roms = [
+            "AMDGopDriver-5825U.rom",
+            "AMDGopDriver.rom",
+            "AMDGopDriver_5500U.rom",
+            "AMDGopDriver_5600G.rom",
+            "AMDGopDriver_5700G.rom",
+            "AMDGopDriver_5700U.rom",
+            "AMDGopDriver_5800H.rom",
+            "AMDGopDriver_6600H.rom",
+            "AMDGopDriver_6800H.rom",
+            "AMDGopDriver_6900HX.rom",
+            "AMDGopDriver_7840hs.rom",
+            "AMDGopDriver_7900.rom",
+            "AMDGopDriver_7950x.rom",
+            "AMDGopDriver_8700GE.rom",
+            "AMDGopDriver_8745hs.rom",
+            "AMDGopDriver_8845hs.rom",
+            "AMDGopDriver_8945.rom",
+            "AMDGopDriver_9700x.rom",
+            "AMDGopDriver_9800x3d.rom",
+            "vbios_5500U.bin",
+            "vbios_5600G.bin",
+            "vbios_5700G.bin",
+            "vbios_5700U.bin",
+            "vbios_5825U.bin",
+            "vbios_6600h.bin",
+            "vbios_6800h.bin",
+            "vbios_6900HX.bin",
+            "vbios_7530u.bin",
+            "vbios_7600x.bin",
+            "vbios_7700x.rom",
+            "vbios_7735hs.bin",
+            "vbios_7840hs.bin",
+            "vbios_7900.bin",
+            "vbios_7900x.bin",
+            "vbios_7940hs.bin",
+            "vbios_7945hx.bin",
+            "vbios_7950x.bin",
+            "vbios_7950x3d.bin",
+            "vbios_8600g.bin",
+            "vbios_8700g.bin",
+            "vbios_8745hs.bin",
+            "vbios_8845hs.bin",
+            "vbios_8845hs.dat",
+            "vbios_8945.bin",
+            "vbios_9700x.bin",
+            "vbios_9800x3d.bin",
+            "vbios_9950x.rom",
+        ]
+        for rom in roms:
+            download_script.append(
+                f"sudo wget --continue --output-document=/usr/share/kvm/{rom} "
+                + f"https://github.com/isc30/ryzen-gpu-passthrough-proxmox/raw/refs/heads/main/{rom} ",
+            )
+
+        download_script_str = " && ".join(download_script)
+
+        PulumiExtras.run_command_on_remote_host(
+            resource_name=f"{resource_name_prefix}_download_gpu_roms",
+            connection=self.pulumi_connection,
+            create=download_script_str,
+            opts=pulumi.ResourceOptions(
+                parent=self.enable_iommu,
+            ),
+        )
+        return
+
+    def _setup_network_device(self):
+        pulumi_connection = pulumi_command.remote.ConnectionArgs(
+            host=self.proxmox_ip,
+            port=22,
+            user=self.proxmox_api_username,
+            private_key=self.private_key.private_key_pem,
+        )
+
+        """
+        auto vmbr0
+        iface vmbr0 inet static
+            address 192.168.10.50/24
+            gateway 192.168.10.1
+            bridge-ports enx8cae4cb90faf
+            bridge-stp off
+            bridge-fd 0
+
+        auto vmbr1
+        iface vmbr1 inet static
+            address 192.168.100.1/24
+            bridge-ports none
+            bridge-stp off
+            bridge-fd 0
+
+        ip link add vmbr1 type bond
+        ip link set vmbr1 up
+
+        ip link add bond0 type bond
+        ip link set bond0 up
+        ip link set eno1 master bond0
+        ip link set eno2 master bond0
+
+        auto bond0
+        iface bond0 inet static
+            address 192.168.1.3/24
+            bond-mode 802.3ad
+            bond-miimon 100
+            bond-slaves eno1 eno2
+        """
+
+        # Add a pulumi user
+        create_stmt = pulumi.Output.all(
+            username=self.proxmox_api_username, node_name=self.node_name
+        ).apply(
+            lambda args: (
+                f"sudo pveum user add {args['username']}@{args['node_name']} && "
+                + f"sudo pveum aclmod / -user {args['username']}@{args['node_name']} -role Administrator"
+            )
+        )
+        delete_stmt = pulumi.Output.all(
+            username=self.proxmox_api_username, node_name=self.node_name
+        ).apply(
+            lambda args: (
+                f"sudo pveum user delete {args['username']}@{args['node_name']}"
+            )
+        )
+        self.sub_component_create_api_user = PulumiExtras.run_command_on_remote_host(
+            resource_name=f"{self.resource_name_prefix}ProxmoxCreatePulumiApiUser",
+            connection=pulumi_connection,
+            create=create_stmt,
+            delete=delete_stmt,
+            opts=pulumi.ResourceOptions(
+                parent=self.sub_component_add_pulumi_to_sudo,
+                depends_on=[self.sub_component_create_pulumi_user],
+                delete_before_replace=True,
+            ),
+        )
 
     def _remove_enterprise_repo(self) -> None:
         self.remove_enterprise_repo = PulumiExtras.run_command_on_remote_host(
@@ -166,7 +375,9 @@ class ProxmoxBase(pulumi.ComponentResource):
 
         # Create the pulumi user
         create_stmt = self.proxmox_api_username.apply(
-            lambda username: (f"useradd --create-home -s /bin/bash {username}")
+            lambda username: (
+                f"id -u {username} &>/dev/null || useradd --create-home -s /bin/bash {username}"
+            )
         )
         delete_stmt = self.proxmox_api_username.apply(
             lambda username: (f"userdel --remove {username}")

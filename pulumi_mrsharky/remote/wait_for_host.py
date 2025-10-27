@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 
 import pulumi
 from pulumi import Input, Output, ResourceOptions
@@ -18,12 +18,12 @@ class WaitForHostArgs(object):
 
     def __init__(
         self,
-        host: str,
-        user: str,
-        port: int = 22,
-        max_wait_for_reboot_in_seconds: int = 300,
-        password: str = None,
-        private_key: str = None,
+        host: Input[str] | str,
+        user: Input[str] | str,
+        port: Input[int] | int = 22,
+        max_wait_for_reboot_in_seconds: Input[int] = 300,
+        password: Optional[Union[Input[str], str]] = None,
+        private_key: Optional[Union[Input[str], str]] = None,
     ) -> None:
         self.host = host
         self.port = port

@@ -21,8 +21,8 @@ class RebootArgs(object):
         user: str,
         port: int = 22,
         max_wait_for_reboot_in_seconds: int = 300,
-        password: Union[Output[str], str] = None,
-        private_key: Union[Output[str], str] = None,
+        password: Optional[Union[Output[str], str]] = None,
+        private_key: Optional[Union[Output[str], str]] = None,
         use_sudo: bool = False,
     ) -> None:
         self.host = host

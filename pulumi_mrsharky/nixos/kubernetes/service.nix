@@ -1,11 +1,13 @@
-{ config, lib, pkgs, ... }:
-
-let
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}: let
   # An object containing user configuration (in /etc/nixos/configuration.nix)
   cfg = config.services.single_node_kubernetes;
 
   ip_address = lib.getHostByName "localhost";
-
 in {
   # Create the main option to toggle the service state
   options.services.single_node_kubernetes = {
@@ -31,10 +33,9 @@ in {
 
     api_server_port = lib.mkOption {
       type = lib.types.int;
-      default = 6443;  # Had to change this from the default 8443 because Unifi controller uses that
+      default = 6443; # Had to change this from the default 8443 because Unifi controller uses that
       example = 6443;
     };
-
   };
 
   # The following are the options we enable the user to configure for this
@@ -59,42 +60,42 @@ in {
       enable = true;
       allowPing = true;
       allowedTCPPorts = [
-        cfg.api_server_port  # Kubernetes
+        cfg.api_server_port # Kubernetes
         # Ingress
         80
         443
         8445
         # Unifi
-        8443  # Unifi - Web interface + API
-        3478  # Unifi - STUN port
-        10001  # Unifi - Device discovery
-        8080  # Unifi - Contrellor
-        1900  # ???
-        8843  # Unifi - Captive Portal (https)
-        8880  # Unifi - Captive Portal (http)
-        6789  # Unifi - Speedtest
-        5514  # Unifi - remote syslog
+        8443 # Unifi - Web interface + API
+        3478 # Unifi - STUN port
+        10001 # Unifi - Device discovery
+        8080 # Unifi - Contrellor
+        1900 # ???
+        8843 # Unifi - Captive Portal (https)
+        8880 # Unifi - Captive Portal (http)
+        6789 # Unifi - Speedtest
+        5514 # Unifi - remote syslog
         # Wolf - Game streaming
-        47984  # Wolf - https
-        47989  # Wolf - http
-        48010  # Wolf - rtsp
+        47984 # Wolf - https
+        47989 # Wolf - http
+        48010 # Wolf - rtsp
       ];
       allowedUDPPorts = [
-        cfg.api_server_port  # Kubernetes
+        cfg.api_server_port # Kubernetes
         # Ingress
         80
         443
         8445
         # Unifi
-        8443  # Unifi - Web interface + API
-        3478  # Unifi - STUN port
-        10001  # Unifi - Device discovery
-        8080  # Unifi - Contrellor
-        1900  # ???
-        8843  # Unifi - Captive Portal (https)
-        8880  # Unifi - Captive Portal (http)
-        6789  # Unifi - Speedtest
-        5514  # Unifi - remote syslog
+        8443 # Unifi - Web interface + API
+        3478 # Unifi - STUN port
+        10001 # Unifi - Device discovery
+        8080 # Unifi - Contrellor
+        1900 # ???
+        8843 # Unifi - Captive Portal (https)
+        8880 # Unifi - Captive Portal (http)
+        6789 # Unifi - Speedtest
+        5514 # Unifi - remote syslog
       ];
     };
 
@@ -136,7 +137,7 @@ in {
     # the correct setting in the "/etc/resolv.conf" file. This will force nixos
     # to write the correct nameserver into the file
     environment.etc = {
-      "resolv.conf".text = lib.mkForce  "nameserver ${cfg.nameserver_ip}\n";
+      "resolv.conf".text = lib.mkForce "nameserver ${cfg.nameserver_ip}\n";
     };
   };
 }

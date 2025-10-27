@@ -11,9 +11,9 @@ class RunCommandsOnHost(pulumi.ComponentResource):
         self,
         resource_name: str,
         connection: pulumi.Input[pulumi.InputType[ConnectionArgs]],
-        create: List[Union[str, Output]],
-        delete: List[Optional[Union[str, Output]]] = None,
-        update: List[Optional[Union[str, Output]]] = None,
+        create: List[str] | List[Output[str]],
+        delete: Optional[Union[List[str], List[Output[str]]]] = None,
+        update: Optional[Union[List[str], List[Output[str]]]] = None,
         environment: Optional[pulumi.Input[Mapping[str, pulumi.Input[str]]]] = None,
         stdin: Optional[pulumi.Input[str]] = None,
         triggers: Optional[pulumi.Input[Sequence[Any]]] = None,
@@ -21,26 +21,30 @@ class RunCommandsOnHost(pulumi.ComponentResource):
         opts: Optional[pulumi.ResourceOptions] = None,
     ) -> None:
         # Convert input statements to pulumi.Output
-        create = self._generate_outputs_from_string_list(create, use_sudo)
+        create_stmt = self._generate_outputs_from_string_list(create, use_sudo)
         if delete is not None:
-            delete = self._generate_outputs_from_string_list(delete, use_sudo)
+            delete_stmt = self._generate_outputs_from_string_list(delete, use_sudo)
+        else:
+            delete_stmt = None
         if update is not None:
-            update = self._generate_outputs_from_string_list(update, use_sudo)
+            update_stmt = self._generate_outputs_from_string_list(update, use_sudo)
+        else:
+            update_stmt = None
 
         # If no update_stmt was given, but we have a delete statement
         # Make the update run the delete first, then create
         if delete is not None and update is None:
-            update = pulumi.Output.all(
-                create_stmt=create.apply(lambda u: u),
-                delete_stmt=delete.apply(lambda u: u),
+            update_stmt = pulumi.Output.all(
+                create_stmt=create_stmt.apply(lambda u: u),
+                delete_stmt=delete_stmt.apply(lambda u: u),
             ).apply(lambda args: f"{args['delete_stmt']} && {args['create_stmt']}")
 
         remote_cmd = pulumi_command.remote.Command(
             resource_name=f"{resource_name}-remote-command",
             connection=connection,
-            create=create,
-            delete=delete,
-            update=update,
+            create=create_stmt,
+            delete=delete_stmt,
+            update=update_stmt,
             environment=environment,
             stdin=stdin,
             triggers=triggers,
@@ -81,7 +85,9 @@ class RunCommandsOnHost(pulumi.ComponentResource):
         return
 
     def _generate_outputs_from_string_list(
-        self, statements: List[Union[str, Output]], use_sudo: bool = False
+        self,
+        statements: List[str] | List[Output[str]],
+        use_sudo: bool = False,
     ):
         combined_statements = pulumi.Output.all(x="").apply(lambda args: f"{args['x']}")
         sudo = ""

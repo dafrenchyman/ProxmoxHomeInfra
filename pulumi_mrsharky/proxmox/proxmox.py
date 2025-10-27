@@ -370,7 +370,7 @@ class Proxmox:
         self.add_vfio_conf = PulumiExtras.save_file_on_remote_host(
             resource_name="proxmoxCreateVfioConf",
             connection=pulumi_connection,
-            file_contents="vfio\nvfio_iommu_type1\nvfio_pci",
+            file_contents="vfio\nvfio_iommu_type1\nvfio_pci\nvfio_virqfd",
             file_location="/etc/modules-load.d/vfio.conf",
             use_sudo=True,
             opts=pulumi.ResourceOptions(parent=self.reboot_after_grub, depends_on=[]),

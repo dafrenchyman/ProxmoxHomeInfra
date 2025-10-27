@@ -11,7 +11,7 @@ repos:
         name: isort
         args: ["--profile", "black", "--filter-files"]
   - repo: https://github.com/PyCQA/flake8
-    rev: 7.0.0
+    rev: 7.3.0
     hooks:
       - id: flake8
   - repo: https://github.com/pre-commit/mirrors-prettier
@@ -19,7 +19,28 @@ repos:
     hooks:
       - id: prettier
   - repo: https://github.com/Yelp/detect-secrets
-    rev: v1.4.0
+    rev: v1.5.0
     hooks:
       - id: detect-secrets
         args: ["--baseline", ".secrets.baseline"]
+  #  - repo: https://github.com/kamadorueda/alejandra
+  #    rev: 4.0.0
+  #    hooks:
+  #      - id: alejandra
+  - repo: local
+    hooks:
+      - id: alejandra
+        name: Alejandra formatter
+        entry: alejandra
+        language: system
+        types: [nix]
+  #  - repo: https://github.com/nerdypepper/statix
+  #    rev: v0.5.8
+  #    hooks:
+  #      - id: statix
+  #        args: [check]
+#  - repo: https://github.com/astro/deadnix
+#    rev: v1.3.1
+#    hooks:
+#      - id: deadnix
+#        args: [--no-ignore]

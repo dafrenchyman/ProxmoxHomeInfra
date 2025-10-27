@@ -1,4 +1,4 @@
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 from pulumi import Input, Output, ResourceOptions
 from pulumi.dynamic import CreateResult, Resource, ResourceProvider
@@ -16,12 +16,12 @@ class CreateConfigArgs(object):
 
     def __init__(
         self,
-        ssh_host: str,
-        ssh_user: str,
-        kubectl_api_url: str,
-        ssh_port: int = 22,
-        ssh_password: Union[Output[str], str] = None,
-        ssh_private_key: Union[Output[str], str] = None,
+        ssh_host: Optional[Input[str]],
+        ssh_user: Optional[Input[str]],
+        kubectl_api_url: Input[str],
+        ssh_port: Optional[Input[float]] = 22,
+        ssh_password: Optional[Input[str]] = None,
+        ssh_private_key: Optional[Input[str]] = None,
     ) -> None:
         if ssh_host is None:
             raise Exception(f"{self.__class__.__name__}: ssh_host cannot be None")
@@ -65,6 +65,9 @@ class CreateConfigProvider(ResourceProvider):
             kubectl_api_url=arguments.kubectl_api_url,
         )
 
+        if kubectl_config is None:
+            raise Exception("generate_kubectl_config returned None")
+
         outs = {
             "kubectl_config": kubectl_config,
             "ssh_host": arguments.ssh_host,
@@ -77,9 +80,9 @@ class CreateConfigProvider(ResourceProvider):
         return CreateResult(id_=arguments.ssh_host, outs=outs)
 
     def delete(self, id: str, props: Any) -> None:
-        arguments = self._process_inputs(props)
-        outs = {}
-        return CreateResult(id_=arguments.ssh_host, outs=outs)
+        outs: dict[str, Any] = {}
+        _result = CreateResult(id_=str(id), outs=outs)  # noqa: F841
+        return
 
 
 class CreateConfig(Resource):
@@ -98,4 +101,9 @@ class CreateConfig(Resource):
         opts: Optional[ResourceOptions] = None,
     ):
         full_args = {"kubectl_config": None, **vars(create_config_args)}
-        super().__init__(CreateConfigProvider(), resource_name, full_args, opts)
+        super().__init__(
+            provider=CreateConfigProvider(),
+            name=resource_name,
+            props=full_args,
+            opts=opts,
+        )

@@ -1,13 +1,15 @@
 import io
 import socket
 import time
+from typing import Optional
 
 import paramiko
 from paramiko.client import SSHClient
+from pulumi import Input
 
 IOMMU_GRUB = {
-    "INTEL": "quiet intel_iommu=on iommu=pt",
-    "AMD": "quiet amd_iommu=on iommu=pt",
+    "INTEL": "quiet intel_iommu=on iommu=pt pcie_acs_override=downstream",
+    "AMD": "quiet amd_iommu=on iommu=pt pcie_acs_override=downstream",
 }
 
 IOMMU_UEFI = {
@@ -19,7 +21,11 @@ IOMMU_UEFI = {
 class RemoteMethods:
     @staticmethod
     def ssh_connection(
-        host: str, user: str, port: int, password: str = None, private_key: str = None
+        host: Optional[Input[str]],
+        user: Optional[Input[str]],
+        port: Optional[Input[int]],
+        password: Optional[Input[str]] = None,
+        private_key: Optional[Input[str]] = None,
     ) -> SSHClient:
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -40,8 +46,8 @@ class RemoteMethods:
         host: str,
         user: str,
         port: int,
-        password: str = None,
-        private_key: str = None,
+        password: Optional[str] = None,
+        private_key: Optional[str] = None,
         max_wait_for_reboot_in_seconds: int = 300,
     ) -> float:
         # Loop and wait
@@ -85,8 +91,8 @@ class RemoteMethods:
         host: str,
         user: str,
         port: int,
-        password: str = None,
-        private_key: str = None,
+        password: Optional[str] = None,
+        private_key: Optional[str] = None,
         max_wait_for_reboot_in_seconds: int = 300,
         use_sudo: bool = False,
     ) -> float:
@@ -100,6 +106,9 @@ class RemoteMethods:
         ssh.exec_command(command_to_run)
         ssh.close()
 
+        # Wait for ssh to close
+        time.sleep(30)
+
         finish_time = RemoteMethods.wait_for_remote_host(
             host=host,
             user=user,
@@ -112,11 +121,11 @@ class RemoteMethods:
 
     @staticmethod
     def enable_iommu(
-        host: str,
-        user: str,
-        port: int = 22,
-        password: str = None,
-        private_key: str = None,
+        host: Input[str],
+        user: Input[str],
+        port: Input[int] = 22,
+        password: Optional[Input[str]] = None,
+        private_key: Optional[Input[str]] = None,
     ):
         # Connect using the proper creds
         ssh = RemoteMethods.ssh_connection(
@@ -137,6 +146,7 @@ class RemoteMethods:
         detect_cpu = ssh.exec_command(command_to_run)
 
         cpu_type = detect_cpu[1].read().decode("ascii").strip()
+        print(f"CPU Type: {cpu_type}")
         if cpu_type not in IOMMU_GRUB.keys():
             raise Exception(f"Not an Intel or AMD CPU: {cpu_type}")
 
@@ -179,10 +189,23 @@ class RemoteMethods:
             )
             ssh.exec_command(cmdline_modify)
 
-        ssh.close()
+        # Create "/etc/modules-load.d/vfio.conf" to add vfio modules
+        cmdline_create_vfio_conf = (
+            r'sudo echo -e "vfio\nvfio_iommu_type1\nvfio_pci\nvfio_virqfd" '
+            r"> /etc/modules-load.d/vfio.conf"
+        )
+        ssh.exec_command(cmdline_create_vfio_conf)
 
-        # If we check for a connection right away, ssh might still be available
-        time.sleep(30)
+        # Blacklist drivers "/etc/modprobe.d/blacklist.conf"
+        cmdline_blacklist = (
+            r'sudo echo -e "blacklist amdgpu\nblacklist radeon\nblacklist '
+            r'nouveau\nblacklist nvidia*\nblacklist i915" > /etc/modprobe.d/blacklist.conf'
+        )
+        ssh.exec_command(cmdline_blacklist)
+        ssh.exec_command("sudo update-initramfs -u -k all")
+
+        # Close the session
+        ssh.close()
 
         # Reboot Machine
         finish_time = RemoteMethods.reboot_function(
@@ -197,11 +220,11 @@ class RemoteMethods:
 
     @staticmethod
     def disable_iommu(
-        host: str,
-        user: str,
-        port: int,
-        password: str = None,
-        private_key: str = None,
+        host: Input[str],
+        user: Input[str],
+        port: Input[int],
+        password: Optional[Input[str]] = None,
+        private_key: Optional[Input[str]] = None,
     ):
         # Connect using the proper creds
         ssh = RemoteMethods.ssh_connection(
@@ -243,6 +266,13 @@ class RemoteMethods:
             )
             ssh.exec_command(cmdline_modify)
 
+        # Remove vfio modules
+        ssh.exec_command("sudo rm /etc/modules-load.d/vfio.conf")
+
+        # Remove Blacklist
+        ssh.exec_command("sudo rm /etc/modprobe.d/blacklist.conf")
+
+        # Close the session
         ssh.close()
 
         # Reboot machine
@@ -318,12 +348,12 @@ class RemoteMethods:
 
     @staticmethod
     def generate_kubectl_config(
-        ssh_host: str,
-        ssh_user: str,
-        ssh_port: int,
-        kubectl_api_url: str,
-        ssh_password: str = None,
-        ssh_private_key: str = None,
+        ssh_host: Optional[Input[str]],
+        ssh_user: Optional[Input[str]],
+        ssh_port: Optional[Input[int]],
+        kubectl_api_url: Optional[Input[str]],
+        ssh_password: Optional[Input[str]] = None,
+        ssh_private_key: Optional[Input[str]] = None,
     ) -> str:
         # Connect using the proper creds
         ssh = RemoteMethods.ssh_connection(
@@ -337,8 +367,10 @@ class RemoteMethods:
         # Certificate Authority
         ca_pem = RemoteMethods.base64_file(ssh, r"/var/lib/kubernetes/secrets/ca.pem")
         cluster_admin = RemoteMethods.base64_file(
-            ssh, "/var/lib/kubernetes/secrets/cluster-admin.pem"
+            ssh, r"/var/lib/kubernetes/secrets/cluster-admin.pem"
         )
+        # "/var/lib/kubernetes/secrets/cluster-admin.pem"
+
         cluster_admin_key = RemoteMethods.base64_file(
             ssh, "/var/lib/kubernetes/secrets/cluster-admin-key.pem"
         )
@@ -349,7 +381,7 @@ class RemoteMethods:
 clusters:
 - cluster:
     certificate-authority-data: {ca_pem}
-    server: {kubectl_api_url}  # https://nixoskube1:6443
+    server: {kubectl_api_url}
   name: local
 contexts:
 - context:

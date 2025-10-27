@@ -1,6 +1,9 @@
-{ config, lib, pkgs, ... }:
-
-let
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}: let
   nix_hostname = "{{HOSTNAME}}";
   # When using easyCerts=true the IP Address must resolve to the master on creation.
   # So use simply 127.0.0.1 in that case. Otherwise you will have errors like this https://github.com/NixOS/nixpkgs/issues/59364
@@ -8,8 +11,7 @@ let
   kubeMasterHostname = "{{KUBE_HOSTNAME}}";
   resolvConfNameserver = "{{NAMESERVER}}";
   kubeMasterAPIServerPort = 6443;
-in
-{
+in {
   # Import the qemu-guest.nix file from the nixpkgs repository on GitHub
   #   https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/profiles/qemu-guest.nixC
   imports = [
@@ -36,7 +38,6 @@ in
     smartmontools
     snapraid
     wget
-
   ];
 
   #######################################################
@@ -73,7 +74,7 @@ in
   # the correct setting in the "/etc/resolv.conf" file. This will force nixos
   # to write the correct nameserver into the file
   environment.etc = {
-    "resolv.conf".text = lib.mkForce  "nameserver ${resolvConfNameserver}\n";
+    "resolv.conf".text = lib.mkForce "nameserver ${resolvConfNameserver}\n";
   };
 
   networking.firewall = {
@@ -86,19 +87,19 @@ in
       443
       8445
       # Unifi
-      8443  # Unifi - Web interface + API
-      3478  # Unifi - STUN port
-      10001  # Unifi - Device discovery
-      8080  # Unifi - Contrellor
-      1900  # ???
-      8843  # Unifi - Captive Portal (https)
-      8880  # Unifi - Captive Portal (http)
-      6789  # Unifi - Speedtest
-      5514  # Unifi - remote syslog
+      8443 # Unifi - Web interface + API
+      3478 # Unifi - STUN port
+      10001 # Unifi - Device discovery
+      8080 # Unifi - Contrellor
+      1900 # ???
+      8843 # Unifi - Captive Portal (https)
+      8880 # Unifi - Captive Portal (http)
+      6789 # Unifi - Speedtest
+      5514 # Unifi - remote syslog
       # Wolf - Game streaming
-      47984  # Wolf - https
-      47989  # Wolf - http
-      48010  # Wolf - rtsp
+      47984 # Wolf - https
+      47989 # Wolf - http
+      48010 # Wolf - rtsp
     ];
     allowedUDPPorts = [
       kubeMasterAPIServerPort # Kubernetes
@@ -107,15 +108,15 @@ in
       443
       8445
       # Unifi
-      8443  # Unifi - Web interface + API
-      3478  # Unifi - STUN port
-      10001  # Unifi - Device discovery
-      8080  # Unifi - Contrellor
-      1900  # ???
-      8843  # Unifi - Captive Portal (https)
-      8880  # Unifi - Captive Portal (http)
-      6789  # Unifi - Speedtest
-      5514  # Unifi - remote syslog
+      8443 # Unifi - Web interface + API
+      3478 # Unifi - STUN port
+      10001 # Unifi - Device discovery
+      8080 # Unifi - Contrellor
+      1900 # ???
+      8843 # Unifi - Captive Portal (https)
+      8880 # Unifi - Captive Portal (http)
+      6789 # Unifi - Speedtest
+      5514 # Unifi - remote syslog
     ];
   };
 
@@ -137,7 +138,7 @@ in
   # Get serial console working
   systemd.services."getty@tty1" = {
     enable = lib.mkForce true;
-    wantedBy = [ "getty.target" ]; # to start at boot
+    wantedBy = ["getty.target"]; # to start at boot
     serviceConfig.Restart = "always"; # restart when session is closed
   };
 
@@ -156,7 +157,10 @@ in
   };
 
   networking = {
-    defaultGateway = { address = "10.1.1.1"; interface = "eth0"; };
+    defaultGateway = {
+      address = "10.1.1.1";
+      interface = "eth0";
+    };
     dhcpcd.enable = false;
     interfaces.eth0.useDHCP = false;
   };
@@ -193,7 +197,7 @@ in
         - set-passwords
         - ssh
       cloud_final_modules: []
-      '';
+    '';
   };
 
   #############################

@@ -1,0 +1,41 @@
+{
+  "timezone": "America/Los_Angeles",
+  "gateway": "192.168.10.1",
+  "domain_name": "home.arpa",
+  "nameserver_ip": "192.168.10.1",
+  "username": "",
+  "password": "",
+  "internal_network_ip": "192.168.10.1",
+  "internal_network_cidr": 24,
+  "cloud_init_enable": false,
+  "custom_glances_enable": false,
+  "desktop_apps_enable": false,
+  "gpu_enable": false,
+  "gpu_gpu_type": "",
+  "gow_wolf_enable": false,
+  "fileserver_enable": false,
+  "fileserver_username": "",
+  "fileserver_password": "",
+  "fileserver_hosts_allow": "192.168.10. 192.168.100. 127.0.0.1 localhost",
+  "samba_mount_enable": false,
+  "samba_mount_path": "//ip_address/mount_name",
+  "samba_mount_mount_location": "/mnt/samba_mount",
+  "samba_mount_username": "",
+  "samba_mount_password": "",
+  "single_node_k3s": {
+    "enable": false,
+    "hostname": "nixkube",
+    "full_hostname": "nixkube.home.arpa",
+    "wiki_js": {
+      "enable": false,
+      "config_path": "/mnt/kube/config/wikijs",
+      "data_path": "/mnt/kube/data/wikijs"
+    }
+  },
+  "kube_single_node_enable": false,
+  "kube_master_ip": "",
+  "kube_nix_hostname": "",
+  "kube_master_hostname": "",
+  "kube_resolv_conf_nameserver": "",
+  "kube_master_api_server_port": 6443
+}

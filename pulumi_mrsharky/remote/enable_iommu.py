@@ -1,4 +1,4 @@
-from typing import Any, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 from pulumi import Input, Output, ResourceOptions
 from pulumi.dynamic import CreateResult, Resource, ResourceProvider
@@ -15,11 +15,11 @@ class EnableIOMMUArgs(object):
 
     def __init__(
         self,
-        host: str,
-        user: str,
-        port: int = 22,
-        password: Union[Output[str], str] = None,
-        private_key: Union[Output[str], str] = None,
+        host: Input[str] | str,
+        user: Input[str] | str,
+        port: Input[int] | int = 22,
+        password: Optional[Union[Input[str], str]] = None,
+        private_key: Optional[Union[Input[str], str]] = None,
     ) -> None:
         if host is None:
             raise Exception(f"{self.__class__.__name__}: host cannot be None")
@@ -37,7 +37,7 @@ class EnableIOMMUArgs(object):
 
 
 class EnableIOMMUProvider(ResourceProvider):
-    def _process_inputs(self, props) -> EnableIOMMUArgs:
+    def _process_inputs(self, props: Dict[str, Any]) -> EnableIOMMUArgs:
         arguments = EnableIOMMUArgs(
             host=props.get("host"),
             user=props.get("user"),
@@ -47,7 +47,7 @@ class EnableIOMMUProvider(ResourceProvider):
         )
         return arguments
 
-    def create(self, props: Any):
+    def create(self, props: Dict[str, Any]):
         arguments = self._process_inputs(props)
 
         # Run the reboot function that waits
@@ -92,4 +92,9 @@ class EnableIOMMU(Resource):
         opts: Optional[ResourceOptions] = None,
     ):
         full_args = {"finish_time": None, **vars(enable_iommu_args)}
-        super().__init__(EnableIOMMUProvider(), resource_name, full_args, opts)
+        super().__init__(
+            provider=EnableIOMMUProvider(),
+            name=resource_name,
+            props=full_args,
+            opts=opts,
+        )

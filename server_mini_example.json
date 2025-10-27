@@ -1,0 +1,238 @@
+{
+  "timezone": "America/Los_Angeles",
+  "gateway": "192.168.10.1",
+  "domain_name": "home.arpa",
+  "nameserver_ip": "192.168.10.1",
+
+  "cidr": 24,
+  "proxmox_server_ip": "192.168.10.10",
+  "proxmox_server_pass": "password_to_proxmox",
+  "proxmox_server_name": "pve-mini",
+
+  "nixos_virtual_machines": [
+    {
+      "hostname": "nixosMinifileserver",
+      "vm_name": "NixosMiniFileserver",
+      "vm_description": "NixosMiniFileserver",
+      "memory": 4096,
+      "cpu_cores": 2,
+      "args_old": "-cpu 'host,-hypervisor,kvm=off'",
+      "kvm": true,
+      "disk_space_in_gb": 500,
+      "machine": "q35",
+      "ip": "192.168.10.11",
+      "start_on_boot": false,
+      "hardware_passthrough": [],
+      "settings": {
+        "username": "changeMe",
+        "password": "changeMe",
+        "cloud_init": {
+          "enable": true
+        },
+        "custom_glances_enable": true,
+        "desktop_apps_enable": false,
+        "samba_server": {
+          "enable": true,
+          "username": "samba-user",
+          "password": "changeMe",
+          "server_name": "minismbnix",
+          "shares": {
+            "SnapArrays_rw": {
+              "path": "/mnt/Fileserver",
+              "browseable": "yes",
+              "read only": "no",
+              "guest ok": "no"
+            },
+            "SnapArrays_ro": {
+              "path": "/mnt/Fileserver",
+              "browseable": "yes",
+              "read only": "yes",
+              "guest ok": "no"
+            }
+          }
+        }
+      },
+      "drive_mounts": {}
+    },
+    {
+      "hostname": "nixoskubemini",
+      "vm_name": "NixosKubeMini",
+      "vm_description": "NixosKubeMini",
+      "memory": 16384,
+      "cpu_cores": 4,
+      "args_old": "-cpu 'host,-hypervisor,kvm=off'",
+      "kvm": true,
+      "disk_space_in_gb": 100,
+      "machine": "q35",
+      "ip": "192.168.10.12",
+      "start_on_boot": false,
+      "hardware_passthrough_old": [
+        "0000:65:00.0,pcie=1,romfile=vbios_7840hs.bin",
+        "0000:65:00.1,pcie=1,romfile=AMDGopDriver_7840hs.rom"
+      ],
+      "hardware_passthrough": [
+        "0000:65:00.0,pcie=1,romfile=vbios_custom.bin",
+        "0000:65:00.1,pcie=1",
+        "0000:65:00.2,pcie=1",
+        "0000:65:00.6,pcie=1"
+      ],
+      "settings": {
+        "username": "changeMe",
+        "password": "changeMe",
+        "cloud_init": {
+          "enable": true
+        },
+        "custom_glances_enable": false,
+        "desktop_apps_enable": false,
+        "gpu_enable": true,
+        "gpu_type": "amd",
+        "gow_wolf_enable": true,
+        "gow_wolf_gpu_type": "amd",
+        "single_node_k3s": {
+          "enable": true,
+          "node_master_ip": "192.168.10.12",
+          "hostname": "nixoskubemini",
+          "full_hostname": "nixoskubemini.home.arpa",
+          "nameserver_ip": "192.168.10.1",
+          "api_server_port": 6443,
+          "airsonic": {
+            "enable": true,
+            "music_path": "/mnt/Fileserver/Music"
+          },
+          "homepage": {
+            "enable": true,
+            "proxmox_widget": {
+              "ip_address": "192.168.10.10",
+              "monitor_username": "homepage@pam!homepage",
+              "monitor_password": "token-from-proxmox"
+            },
+            "weather_widget": {
+              "label": "Olympia",
+              "latitude": 47.0449,
+              "longitude": -122.9017,
+              "units": "imperial"
+            }
+          },
+          "komga": {
+            "enable": true,
+            "books_path": "/mnt/Fileserver/Books",
+            "comics_path": "/mnt/Fileserver/Comics"
+          },
+          "monitoring": {
+            "enable": true
+          },
+          "nzbget": {
+            "enable": true
+          },
+          "plex": {
+            "enable": true,
+            "plex_claim": "",
+            "token": "",
+            "extraVolumes": [
+              {
+                "name": "anime",
+                "path": "/mnt/Fileserver/Anime",
+                "mountPath": "/Anime"
+              },
+              {
+                "name": "movies-pool",
+                "path": "/mnt/Fileserver/Movies",
+                "mountPath": "/Movies"
+              },
+              {
+                "name": "music-pool",
+                "path": "/mnt/Fileserver/Music",
+                "mountPath": "/Music"
+              },
+              {
+                "name": "shows-pool",
+                "path": "/mnt/Fileserver/Shows",
+                "mountPath": "/Shows"
+              }
+            ]
+          },
+          "termix": {
+            "enable": true,
+            "sshHosts": [
+              {
+                "name": "NixOSMiniFileserver",
+                "ip": "192.168.10.12",
+                "port": 22,
+                "username": "ops",
+                "authType": "key",
+                "key": "private_key_here",
+                "keyType": "ssh-ed25519",
+                "folder": "Production",
+                "tags": ["samba", "files"],
+                "pin": false,
+                "enableTerminal": true,
+                "enableTunnel": true,
+                "enableFileManager": true
+              },
+              {
+                "name": "nixoskubemini",
+                "ip": "192.168.10.12",
+                "port": 22,
+                "username": "ops",
+                "authType": "key",
+                "key": "private_key_here",
+                "keyType": "ssh-ed25519",
+                "folder": "Production",
+                "tags": ["k3s"],
+                "pin": false,
+                "enableTerminal": true,
+                "enableTunnel": true,
+                "enableFileManager": true
+              }
+            ]
+          },
+          "transmission_openvpn": {
+            "enable": true,
+            "vpn_provider": "PIA",
+            "vpn_server": "changeMe",
+            "vpn_username": "changeMe",
+            "vpn_password": "changeMe"
+          },
+          "trilium": {
+            "enable": true
+          },
+          "ubooquity": {
+            "enable": true,
+            "books_path": "/mnt/Fileserver/Books",
+            "comics_path": "/mnt/Fileserver/Comics"
+          },
+          "virtual-tabletop": {
+            "enable": true
+          },
+          "wiki_js": {
+            "enable": true,
+            "config_path": "/mnt/kube/config/wikijs",
+            "data_path": "/mnt/kube/data/wikijs"
+          }
+        },
+        "mount_samba": {
+          "enable": true,
+          "shares": {
+            "local_fileserver": {
+              "path": "//192.168.10.11/SnapArrays_rw",
+              "mountPoint": "/mnt/local",
+              "username": "samba-user",
+              "password": "changeMe",
+              "vers": "3.11",
+              "nofail": true
+            },
+            "remote_fileserver": {
+              "path": "//192.168.10.60/SnapArrays_ro",
+              "mountPoint": "/mnt/Bank/SnapArrays_ro",
+              "username": "samba-user",
+              "password": "changeMe",
+              "vers": "3.11",
+              "nofail": true
+            }
+          }
+        }
+      },
+      "drive_mounts": {}
+    }
+  ]
+}

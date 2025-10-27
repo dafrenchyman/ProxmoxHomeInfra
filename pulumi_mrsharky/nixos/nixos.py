@@ -1,13 +1,18 @@
+import json
 import os
-from typing import List, Optional
+from pathlib import Path
+from typing import Any, List, Optional
 
 import pulumi
 import pulumi_command
+import pulumi_kubernetes
 from pulumi import Resource
 from pulumi_tls import PrivateKey
 
 from home_infra.utils.pulumi_extras import PulumiExtras
+from pulumi_mrsharky.local import Local
 from pulumi_mrsharky.nixos.create_config import CreateConfig, CreateConfigArgs
+from pulumi_mrsharky.nixos.nix_settings import NixSettings
 from pulumi_mrsharky.proxmox.get_ip_of_vm import GetIpOfVm, GetIpOfVmArgs
 from pulumi_mrsharky.proxmox.proxmox_connection import ProxmoxConnectionArgs
 from pulumi_mrsharky.proxmox.start_vm import StartVm, StartVmArgs
@@ -25,22 +30,47 @@ class NixosBase:
         self.pulumi_connection = pulumi_connection
         self.parent = parent
 
-        # Copy over all potential services
-        self._copy_extra_services()
+        # Copy over all nix configuration files (.nix)
+        self._copy_configurations()
 
-        # Setup glances
-        self._set_glances()
+        # Optional kubernetes setup
+        self.kube_config = None
+        self.kube_provider = None
+
+        return
+
+    def _upload_local_files(
+        self, local_dir: str, upload_location_root: str, resource_name_suffix: str
+    ):
+        # Get all the files and paths in the local_dir
+        base_path = Path(local_dir)
+
+        file_counter = 0
+        for path in base_path.rglob("*"):
+            relative_path = path.relative_to(base_path)
+            if path.is_file():
+                file_counter += 1
+                curr_suffix = f"{resource_name_suffix}_{file_counter}"
+                # Create the upload path
+                upload_location = str(Path(upload_location_root) / relative_path)
+                local_file_path = str(path)
+                self._upload_local_file(
+                    local_file=local_file_path,
+                    upload_location=upload_location,
+                    resource_name_suffix=curr_suffix,
+                )
+
         return
 
     def _upload_local_file(
         self, local_file: str, upload_location: str, resource_name_suffix: str
     ):
         with open(local_file, "r") as file:
-            glances_default_nix = file.read()
-        self.glances_file_default = SaveFileOnRemoteHost(
+            file_contents = file.read()
+        SaveFileOnRemoteHost(
             resource_name=f"{self.resource_name_prefix}_{resource_name_suffix}",
             connection=self.pulumi_connection,
-            file_contents=glances_default_nix,
+            file_contents=file_contents,
             file_location=upload_location,
             use_sudo=True,
             opts=pulumi.ResourceOptions(
@@ -49,150 +79,128 @@ class NixosBase:
             ),
         )
 
-    def _copy_extra_services(self):
-        # extra_services/default.nix
-        self._upload_local_file(
-            local_file=f"{os.path.dirname(__file__)}/extra_services/default.nix",
-            upload_location="/etc/nixos/extra_services/default.nix",
-            resource_name_suffix="extra_services_default",
-        )
+    def _copy_configurations(self):
+        config_location = Path(__file__).resolve().parent / "config"
 
-        self._upload_local_file(
-            local_file=f"{os.path.dirname(__file__)}/extra_services/glances_default.nix",
-            upload_location="/etc/nixos/extra_services/glances_default.nix",
-            resource_name_suffix="extra_services_glances_default",
+        self._upload_local_files(
+            local_dir=config_location,
+            upload_location_root="/etc/nixos/",
+            resource_name_suffix="nix_config",
         )
+        return
 
-        self._upload_local_file(
-            local_file=f"{os.path.dirname(__file__)}/extra_services/glances_service.nix",
-            upload_location="/etc/nixos/extra_services/glances_service.nix",
-            resource_name_suffix="extra_services_glances_service",
-        )
-
-        self._upload_local_file(
-            local_file=f"{os.path.dirname(__file__)}/extra_services/gow_wolf.nix",
-            upload_location="/etc/nixos/extra_services/gow_wolf.nix",
-            resource_name_suffix="extra_services_gow_wolf",
-        )
-
-        self._upload_local_file(
-            local_file=f"{os.path.dirname(__file__)}/extra_services/single_node_kube.nix",
-            upload_location="/etc/nixos/extra_services/single_node_kube.nix",
-            resource_name_suffix="extra_services_single_node_kube",
-        )
-
-    def _set_glances(self):
-        ####################################
-        # Upload Glances with Prometheus
-        ####################################
-        with open(
-            f"{os.path.dirname(__file__)}/glances_with_prometheus/default.nix", "r"
-        ) as file:
-            glances_default_nix = file.read()
-        self.glances_file_default = SaveFileOnRemoteHost(
-            resource_name=f"{self.resource_name_prefix}_glances_default_nix",
-            connection=self.pulumi_connection,
-            file_contents=glances_default_nix,
-            file_location="/etc/nixos/glances_with_prometheus/default.nix",
-            use_sudo=True,
-            opts=pulumi.ResourceOptions(
-                parent=self.parent,
-                delete_before_replace=True,
-            ),
-        )
-
-        with open(
-            f"{os.path.dirname(__file__)}/glances_with_prometheus/service.nix", "r"
-        ) as file:
-            glances_default_nix = file.read()
-        self.glances_file_default = SaveFileOnRemoteHost(
-            resource_name=f"{self.resource_name_prefix}_glances_service_nix",
-            connection=self.pulumi_connection,
-            file_contents=glances_default_nix,
-            file_location="/etc/nixos/glances_with_prometheus/service.nix",
-            use_sudo=True,
-            opts=pulumi.ResourceOptions(
-                parent=self.parent,
-                delete_before_replace=True,
-            ),
-        )
-
-    def setup_kubernetes(
+    def setup_nixos(
         self,
-        host_name: str,
-        domain_name: str,
-        nameserver_ip: str,
+        settings: NixSettings,
+        drive_settings: Optional[dict[str, Any]] = None,
+        domain_name: Optional[str] = None,
     ):
-        host_name = host_name.lower()
-        domain_name = domain_name.lower()
-
-        full_host_name = f"{host_name}.{domain_name}"
-
-        nix_cfg_file = f"{os.path.dirname(__file__)}/kubernetes/configuration.nix"
-        with open(nix_cfg_file, "r") as file:
-            configuration_nix = file.read()
-
-        # Setup kubernetes config
-        configuration_nix = configuration_nix.replace("{{HOSTNAME}}", host_name)
-        configuration_nix = configuration_nix.replace(
-            "{{KUBE_HOSTNAME}}", full_host_name
-        )
-        configuration_nix = configuration_nix.replace(
-            "{{HOST_IP}}", self.pulumi_connection.host
-        )
-        configuration_nix = configuration_nix.replace("{{NAMESERVER}}", nameserver_ip)
-
-        # Save the configuration.nix file
-        self.configuration_nix = self._upload_configuration_nix(
-            configuration_file_str=configuration_nix,
+        # Save settings.json on remote host
+        nixos_upload_settings = SaveFileOnRemoteHost(
+            resource_name=f"{self.resource_name_prefix}_settings",
+            connection=self.pulumi_connection,
+            file_contents=settings.to_json(),
+            file_location="/etc/nixos/settings.json",
+            use_sudo=True,
+            opts=pulumi.ResourceOptions(
+                parent=self.parent,
+            ),
         )
 
-        # Rebuild / switch
-        # self.nixos_samba_update_channel = RunCommandsOnHost(
-        self.nixos_samba_update_channel = PulumiExtras.run_commands_on_remote_host(
+        # Setup a default hard_drive setup
+        if drive_settings is None:
+            drive_settings = {}
+        nixos_upload_settings = SaveFileOnRemoteHost(
+            resource_name=f"{self.resource_name_prefix}_datajson",
+            connection=self.pulumi_connection,
+            file_contents=json.dumps(drive_settings, indent=2),
+            file_location="/etc/nixos/data.json",
+            use_sudo=True,
+            opts=pulumi.ResourceOptions(
+                parent=self.parent,
+            ),
+        )
+
+        #  --extra-experimental-features flakes
+        self.rebuild_switch = PulumiExtras.run_commands_on_remote_host(
             resource_name=f"{self.resource_name_prefix}_RebuildSwitch",
             connection=self.pulumi_connection,
             create=[
-                "echo 'Starting'",
-                "sudo nixos-rebuild switch -I nixos-config=/etc/nixos/configuration.nix",
-                "echo 'Finished'",
+                (
+                    "sudo nixos-rebuild switch -I nixos-config=/etc/nixos/configuration.nix  --option experimental-features 'nix-command flakes'"  # noqa: E501
+                ),
             ],
             update=[
-                "echo 'Starting'",
-                "sudo nixos-rebuild switch -I nixos-config=/etc/nixos/configuration.nix"
-                "echo 'Finished'",
+                (
+                    "sudo nixos-rebuild switch -I nixos-config=/etc/nixos/configuration.nix  --option experimental-features 'nix-command flakes'"  # noqa: E501
+                ),
             ],
             # use_sudo=True,
             opts=pulumi.ResourceOptions(
-                parent=self.configuration_nix,
+                parent=nixos_upload_settings,
                 delete_before_replace=True,
             ),
         )
 
-        # Generate the "config file and return as string
-        create_config = CreateConfig(
-            resource_name=f"{self.resource_name_prefix}_CreateConfig",
-            create_config_args=CreateConfigArgs(
-                ssh_user=self.pulumi_connection.user,
-                ssh_port=int(self.pulumi_connection.port),
-                ssh_host=self.pulumi_connection.host,
-                kubectl_api_url=f"https://{full_host_name}:6443",
-                ssh_private_key=self.pulumi_connection.private_key,
-            ),
-            opts=pulumi.ResourceOptions(
-                parent=self.nixos_samba_update_channel,
-                delete_before_replace=True,
-            ),
-        )
-        pulumi.export("kubectl", create_config.kubectl_config)
-        return create_config
+        if settings.kube_single_node_enable:
+            if domain_name is None:
+                raise Exception("domain_name required if setting up Kubernetes")
+
+            _full_host_name = (  # noqa: F841
+                f"{settings.kube_nix_hostname}.{domain_name}"
+            )
+            ip_address = settings.kube_master_ip
+
+            # Generate the config file and return as string
+            # Kube config file can be found in: /etc/rancher/k3s/k3s.yaml on server
+            self.kube_config = CreateConfig(
+                resource_name=f"{self.resource_name_prefix}_CreateConfig",
+                create_config_args=CreateConfigArgs(
+                    ssh_user=self.pulumi_connection.user,
+                    ssh_port=self.pulumi_connection.port,
+                    ssh_host=self.pulumi_connection.host,
+                    kubectl_api_url=f"https://{ip_address}:6443",
+                    ssh_private_key=self.pulumi_connection.private_key,
+                ),
+                opts=pulumi.ResourceOptions(
+                    parent=self.rebuild_switch,
+                    delete_before_replace=True,
+                ),
+            )
+            pulumi.export("kubectl", self.kube_config)
+
+            # Connect to kube provider
+            self.kube_provider = pulumi_kubernetes.Provider(
+                resource_name=f"{self.resource_name_prefix}_KubeProvider",
+                kubeconfig=self.kube_config.kubectl_config,
+                opts=pulumi.ResourceOptions(
+                    parent=self.kube_config,
+                ),
+            )
+
+            pulumi.export("kube_provider", self.kube_provider)
+
+            # Save the kubectl config to file:
+            # NOTE: Useful command to generate it manually:
+            # sudo KUBECONFIG=/etc/kubernetes/cluster-admin.kubeconfig kubectl config view --minify --flatten
+            home_folder = os.path.expanduser("~")
+            self.kube_config.kubectl_config.apply(
+                lambda x: Local.text_to_file(
+                    text=x,
+                    filename=f"{home_folder}/.kube/{self.resource_name_prefix}_config",
+                )
+            )
+
+            return
+
+        return
 
     def _upload_configuration_nix(
         self,
         configuration_file_str: str,
     ):
         configuration_path = "/etc/nixos/configuration.nix"
-        nixos_samba_configuration_nix = SaveFileOnRemoteHost(
+        nixos_configuration_nix = SaveFileOnRemoteHost(
             resource_name=f"{self.resource_name_prefix}_ConfigurationNix",
             connection=self.pulumi_connection,
             file_contents=configuration_file_str,
@@ -203,7 +211,7 @@ class NixosBase:
                 delete_before_replace=True,
             ),
         )
-        return nixos_samba_configuration_nix
+        return nixos_configuration_nix
 
 
 class NixosSambaServer:
@@ -361,7 +369,7 @@ class NixosSambaServer:
         # update the nix-channel on the VM
         ####################################
         script = [
-            "nix-channel --add https://nixos.org/channels/nixos-23.11 nixos",
+            "nix-channel --add https://nixos.org/channels/nixos-25.05 nixos",
             "nix-channel --update",
         ]
         self.nixos_samba_update_channel = RunCommandsOnHost(

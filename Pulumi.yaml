@@ -1,6 +1,6 @@
-name: proxmox
+name: proxmox_server
 runtime:
   name: python
   options:
     virtualenv: .venv
-description: A Pulumi program to install a bunch of services onto a proxmox cluster
+description: Home Proxmox Server Setup
