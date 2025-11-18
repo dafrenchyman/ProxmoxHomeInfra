@@ -141,6 +141,83 @@ class ProxmoxConnection:
     def uninstall_app_via_apt_get(self, applications: str):
         return
 
+    def check_group_exists(self, group_name: str) -> bool:
+        # Loop on the nodes and see if we found it
+        for curr_group in self.proxmox_api.access.groups.get():
+            if curr_group.get("groupid") == group_name:
+                return True
+        return False
+
+    def create_group(self, group_name: str):
+        if not self.check_group_exists(group_name):
+            self.proxmox_api.access.groups.post(groupid=group_name, comment=group_name)
+        return
+
+    def check_user_exists(self, userid: str, realm: str):
+        full_userid = f"{userid}@{realm}"
+        for curr_users in self.proxmox_api.access.users.get():
+            if curr_users.get("userid") == full_userid:
+                return True
+        return False
+
+    def create_user_api(
+        self,
+        userid: str,
+        realm: str = "pam",
+        comment: str | None = None,
+        email: str | None = None,
+        firstname: str | None = None,
+        lastname: str | None = None,
+        groups: str | None = None,
+        keys: str | None = None,
+        expire: int = 0,
+        enable: bool = True,
+    ):
+        if not self.check_user_exists(userid, realm):
+            full_user_id = f"{userid}@{realm}"
+            enable_int = 0
+            if enable:
+                enable_int = 1
+            data = {
+                "userid": full_user_id,
+                "expire": expire,
+                "enable": enable_int,
+            }
+            if comment is not None:
+                data["comment"] = comment
+            if email is not None:
+                data["email"] = email
+            if firstname is not None:
+                data["firstname"] = firstname
+            if lastname is not None:
+                data["lastname"] = lastname
+            if groups is not None:
+                data["groups"] = groups
+            if keys is not None:
+                data["keys"] = keys
+            self.proxmox_api.access.users.post(**data)
+        return
+
+    def check_api_token_exists(self, userid: str, realm: str, token_id: str):
+        full_user_id = f"{userid}@{realm}"
+        for token in self.proxmox_api.access.users(full_user_id).token.get():
+            if token.get("tokenid") == token_id:
+                return True
+        return False
+
+    def create_api_token(self, userid: str, realm: str, token_id: str):
+        if not self.check_api_token_exists(userid, realm, token_id):
+            full_user_id = f"{userid}@{realm}"
+            token = self.proxmox_api.post(
+                "access", "users", full_user_id, "token", token_id
+            )
+            token = self.proxmox_api.access.users(full_user_id).token.post(
+                userid=full_user_id,
+                tokenid=token_id,
+            )
+            return token
+        return None
+
     def create_user(
         self, node_name: str, username: str, role: str = "Administrator"
     ) -> None:

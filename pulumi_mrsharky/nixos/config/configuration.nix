@@ -55,7 +55,40 @@ in {
     fsType = "ext4";
     autoResize = true;
   };
-  boot.loader.grub.device = "/dev/sda";
+  boot = lib.mkMerge [
+    # BIOS / SeaBIOS mode
+    (lib.mkIf (settings.boot_mode == "bios") {
+      loader = {
+        grub = {
+          enable = true;
+          version = 2;
+          device = "/dev/sda"; # or /dev/vda depending on how you build that VM
+        };
+        systemd-boot.enable = false;
+        efi.canTouchEfiVariables = false;
+      };
+    })
+
+    # UEFI / OVMF mode
+    (lib.mkIf (settings.boot_mode == "uefi") {
+      loader = {
+        # Disable legacy BIOS GRUB
+        grub = {
+          enable = false;
+          device = "nodev";
+        };
+
+        # Use systemd-boot on the EFI System Partition
+        systemd-boot.enable = true;
+        efi = {
+          canTouchEfiVariables = true;
+          # Depending on how nixos-generators laid things out you may or may not
+          # need to set this explicitly. If your ESP is mounted at /boot:
+          # efiSysMountPoint = "/boot";
+        };
+      };
+    })
+  ];
 
   services.openssh.enable = true;
 
@@ -291,8 +324,7 @@ in {
   extraServices.samba_server = settings.samba_server;
 
   # Setup Games on Whales - Wolf
-  extraServices.gow_wolf.enable = settings.gow_wolf_enable;
-  extraServices.gow_wolf.gpu_type = settings.gow_wolf_gpu_type;
+  extraServices.gow_wolf = settings.gow_wolf;
 
   # Setup GPU
   extraServices.gpu.enable = settings.gpu_enable;

@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 import pulumi
 from pulumi import automation
@@ -15,14 +16,14 @@ from pulumi_mrsharky.proxmox.proxmox_nixos import ProxmoxNixOS
 
 # 1. Define your Pulumi program as a function
 def pulumi_program():
-    machine_name = "proxmox-mini"
     config = pulumi.Config()
 
     os.putenv("PULUMI_K8S_SUPPRESS_HELM_HOOK_WARNINGS", "TRUE")
 
     # Grab all the settings
     settings_str = config.require("settings")
-    settings: dict[str, any] = json.loads(settings_str)
+    settings: dict[str, Any] = json.loads(settings_str)
+    machine_name = settings["machine_name"]
 
     # Global configs
     _timezone = settings.get("timezone", "America/Los_Angeles")  # noqa: F841
@@ -61,21 +62,23 @@ def pulumi_program():
     #     return
 
     # Add the NixOS VMs from the configuration
-    for idx, nixos_vm in enumerate(settings.get("nixos_virtual_machines")):
-        vm_id = 501 + idx
+    for nixos_vm in settings.get("nixos_virtual_machines"):
         hostname = nixos_vm["hostname"]
+
         # Generate the VM
         nixos_kube_resource, nix_kube_connection = proxmox_nixos.create_vm(
             resource_name=f"nixos_{hostname}",
             vm_name=nixos_vm["vm_name"],
             vm_description=nixos_vm["vm_description"],
             memory=nixos_vm.get("memory"),
+            bios=nixos_vm.get("bios"),
+            lvm_name=nixos_vm.get("lvm_name"),
             cpu_cores=nixos_vm.get("cpu_cores", 1),
             kvm=nixos_vm.get("kvm", True),
             machine=nixos_vm.get("machine"),
             extra_args=nixos_vm.get("args", None),
             disk_space_in_gb=nixos_vm.get("disk_space_in_gb"),
-            vm_id=vm_id,
+            vm_id=nixos_vm["vm_id"],
             ip_v4=nixos_vm["ip"],
             ip_v4_gw=gateway,
             ip_v4_cidr=cidr,
@@ -104,9 +107,11 @@ def pulumi_program():
 
 # 2. Setup and run using Automation API
 def main():
+    # config_file = "./server_mini.json"
+    config_file = "./ryzen.json"
 
     # Load the json config file
-    with open("./server_mini.json") as json_data:
+    with open(config_file) as json_data:
         settings = json.load(json_data)
 
     proxmox_server_pass = settings["proxmox_server_pass"]
@@ -115,8 +120,8 @@ def main():
     pulumi_local_path = Path.home() / ".pulumi-local"
     pulumi_local_path.mkdir(exist_ok=True)
 
-    stack_name = "mini_v3"
-    project_name = "mini_pc_setup"
+    stack_name = settings["stack_name"]
+    project_name = settings["project_name"]
 
     # Create or select a stack
     stack = automation.create_or_select_stack(
@@ -150,6 +155,10 @@ def main():
 
     print("Setting config...")
     stack.set_config("settings", automation.ConfigValue(value=json.dumps(settings)))
+
+    # preview_result = stack.preview()
+    # [print(i) for i in str(preview_result).split("\\n")]
+    # return
 
     print("Running pulumi up...")
     up_res = stack.up(on_output=print)

@@ -15,18 +15,22 @@ class ProxmoxNixOS:
         self,
         resource_name_prefix: str,
         proxmox_base: ProxmoxBase,
-        nixos_template_id: int = 9001,
         template_storage_volume_name: str = "local-lvm",
     ):
         self.resource_name_prefix = resource_name_prefix
         self.proxmox_base = proxmox_base
-        self.nixos_template_id = nixos_template_id
         self.template_storage_volume_name = template_storage_volume_name
 
         # Create the template image
-        self.template_resource = self._create_nixos_template(
+        self.template_resource = self._create_nixos_template_25_05_bios(
             resource_name=f"{self.resource_name_prefix}NixOSTemplate",
-            template_id=self.nixos_template_id,
+            template_id=9001,
+            storage_vol_name=template_storage_volume_name,
+        )
+
+        self.template_resource_uefi = self._create_nixos_template_25_05_uefi(
+            resource_name=f"{self.resource_name_prefix}NixOSTemplate_uefi",
+            template_id=9002,
             storage_vol_name=template_storage_volume_name,
         )
 
@@ -36,7 +40,7 @@ class ProxmoxNixOS:
 
         return
 
-    def _create_nixos_template(
+    def _create_nixos_template_25_05_bios(
         self,
         resource_name: str,
         template_id: int,
@@ -86,6 +90,51 @@ class ProxmoxNixOS:
 
         return create_nixos_cloud_init_image
 
+    def _create_nixos_template_25_05_uefi(
+        self,
+        resource_name: str,
+        template_id: int,
+        storage_vol_name: str,
+        opts: Optional[pulumi.ResourceOptions] = None,
+    ) -> pulumi.Resource:
+
+        create_script = [
+            # "sudo mkdir -p /var/lib/vz/images/9003/ ",
+            "sudo wget --continue --output-document=/var/lib/vz/template/iso/nixos-25.05-cloud-init-uefi.qcow2 "
+            + "https://mrsharky.com/extras/nixos-25.05-cloud-init-uefi.qcow2 ",
+            f"sudo qm create {template_id} --memory 2048 --core 2 --cpu cputype=host,flags=+aes "
+            + "--name nixos-25.05-kvm-uefi --net0 virtio,bridge=vmbr0 ",
+            f"sudo qm importdisk {template_id} /var/lib/vz/template/iso/nixos-25.05-cloud-init-uefi.qcow2 "
+            # f"sudo qm importdisk {template_id} /var/lib/vz/images/9003/vm-9003-disk-0.qcow2 "
+            + f"{storage_vol_name}",
+            f"sudo qm set {template_id} --bios ovmf",
+            f"sudo qm set {template_id} --scsihw virtio-scsi-pci --scsi0 {storage_vol_name}:vm-{template_id}-disk-0",
+            f"sudo qm set {template_id} --ide2 {storage_vol_name}:cloudinit",
+            f"sudo qm set {template_id} --boot c --bootdisk scsi0",
+            f"sudo qm set {template_id} --ipconfig0 ip=dhcp",
+            f"sudo qm template {template_id}",
+        ]
+
+        delete_script = [
+            f"sudo qm destroy {template_id} --destroy-unreferenced-disks 1 --purge 1"
+        ]
+
+        create_script = " && ".join(create_script)
+        delete_script = " && ".join(delete_script)
+
+        create_nixos_cloud_init_image = PulumiExtras.run_command_on_remote_host(
+            resource_name=resource_name,
+            connection=self.proxmox_base.pulumi_connection,
+            create=create_script,
+            delete=delete_script,
+            opts=pulumi.ResourceOptions(
+                parent=self.proxmox_base.enable_iommu,
+                delete_before_replace=True,
+            ),
+        )
+
+        return create_nixos_cloud_init_image
+
     def create_vm(
         self,
         resource_name: str,
@@ -99,6 +148,7 @@ class ProxmoxNixOS:
         cpu_cores: Optional[int] = None,
         cpu_type: Optional[str] = None,
         kvm: Optional[bool] = None,
+        lvm_name: str = None,
         disk_space_in_gb: Optional[int] = None,
         start_on_boot: Optional[bool] = None,
         hardware_passthrough: Optional[List[str]] = None,
@@ -114,6 +164,8 @@ class ProxmoxNixOS:
             self.resource_lookup[resource_name] = {}
 
         # Process inputs (and set defaults)
+        if lvm_name is None:
+            lvm_name = "local-lvm"
         if bios is None:
             bios = "seabios"
         if cpu_type is None:
@@ -145,6 +197,13 @@ class ProxmoxNixOS:
         if kvm:
             kvm_status = "1"
 
+        # sudo qm set 503 --efidisk0 file=local-zfs:vm-503-disk-1,format=qcow2,efitype=4m,size=4M
+        # f"qm set {vm_id} --efidisk0 file={lvm_name}:vm-{vm_id}-disk-1,format=qcow2,efitype=4m,size=4M"
+
+        # We need to use a different template if we're using an OVMF bios
+        nixos_template_id = 9001
+        if bios == "ovmf":
+            nixos_template_id = 9002
         # Save file with private key on proxmox for use into this image
 
         # NOTE: Can't use the next line as proxmox_api_username is an output. Will need to
@@ -171,18 +230,18 @@ class ProxmoxNixOS:
         # Create the VM
         create_script = [
             # Clone the nixos template
-            f"qm clone {self.nixos_template_id} {vm_id} --name {vm_name} "
+            f"qm clone {nixos_template_id} {vm_id} --name {vm_name} --storage {lvm_name} "
             + f'--description "{vm_description}" --full 1',
             # Set options on the template
-            f"qm set {vm_id} --kvm {kvm_status} --ciuser ops",
+            f"qm set {vm_id} --kvm {kvm_status} --ciuser ops ",
             f"qm set {vm_id} --cpu {cpu_type}",
             f"qm set {vm_id} --bios {bios}",
             f"qm set {vm_id} --cores {cpu_cores}",
             f"qm set {vm_id} --balloon 0 --memory {memory}",
-            f"qm set {vm_id} --scsi0 local-lvm:vm-{vm_id}-disk-0,ssd=1",
+            f"qm set {vm_id} --scsi0 {lvm_name}:vm-{vm_id}-disk-0,ssd=1",
+            f"qm disk resize {vm_id} scsi0 {disk_space_in_gb}G",
             f"qm set {vm_id} --machine {machine}",  # Set the machine
             f"qm set {vm_id} --onboot {on_boot}",
-            f"qm disk resize {vm_id} scsi0 {disk_space_in_gb}G",
             f"qm set {vm_id} --sshkeys {key_path}",  # Set the SSH key
             # Set cloud-init IP
             f"qm set {vm_id} --ipconfig0 ip={ip_v4}/{ip_v4_cidr},gw={ip_v4_gw}",

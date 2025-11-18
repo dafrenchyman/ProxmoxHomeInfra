@@ -18,6 +18,9 @@ let
     internal_network_ip = "";
     internal_network_cidr = 24;
 
+    # "uefi" or "bios"
+    boot_mode = "uefi";
+
     # Cloud-init (default to true since we use a cloud-init image by default)
     cloud_init = {
       enable = true;
@@ -39,8 +42,10 @@ let
     gpu_gpu_type = "";
 
     # Games on Whales - Wolf
-    gow_wolf_enable = false;
-    gow_wolf_gpu_type = "software";
+    gow_wolf = {
+      enable = false;
+      gpu_type = "software";
+    };
 
     # Samba mount settings
     mount_samba = {

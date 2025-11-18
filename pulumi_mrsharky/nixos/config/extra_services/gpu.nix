@@ -23,67 +23,103 @@ in {
   };
 
   # Everything that should be done when/if the service is enabled
-  config = lib.mkIf cfg.enable {
-    boot.initrd.kernelModules = ["amdgpu"];
-    #boot.kernelModules = [ "amdgpu" ];
-    boot.initrd.availableKernelModules = ["amdgpu"];
+  config = lib.mkIf cfg.enable (lib.mkMerge [
+    ####################################
+    # Common settings (any GPU type)
+    ####################################
+    {
+      nixpkgs.config.allowUnfree = true;
+      hardware.enableAllFirmware = true;
 
-    # Doesn't work
-    #boot.initrd.includeFirmware = true;
+      # Use a recent kernel (you can override if you want a specific one)
+      boot.kernelPackages = pkgs.linuxPackages;
 
-    nixpkgs.config.allowUnfree = true;
-    hardware.enableAllFirmware = true;
-    # boot.initrd.includeFirmware = true;
+      # Basic graphics stack (works for AMD/NVIDIA; harmless for software)
+      hardware.opengl = {
+        enable = true;
+        #driSupport = true;
+        driSupport32Bit = true;
+        extraPackages = with pkgs; [
+          vaapiVdpau
+          libvdpau-va-gl
+        ];
+      };
 
-    # Need to use a newer kernel to have access to the iGPU drivers
-    boot.kernelPackages = pkgs.linuxPackages;
-    # hardware.firmware = [
-    #   (import <nixpkgs> { system = "x86_64-linux"; }).unstable.linux-firmware
-    # ];
+      environment.systemPackages = with pkgs; [
+        ffmpeg-full
+        glxinfo
+        libva
+        libva-utils
+        libvdpau-va-gl
+        mesa
+        mesa.drivers
+        vaapiVdpau
+        vulkan-tools
+      ];
+    }
 
-    # Force loading amdgpu early and allow experimental features
-    boot.kernelParams = [
-      "amdgpu.ppfeaturemask=0xffffffff"
-      # "nomodeset"  # Optional: if troubleshooting framebuffer issues
-      "amdgpu.gfxoff=0"
-      "amdgpu.tmz=0"
-    ];
+    ####################################
+    # AMD GPU
+    ####################################
+    (lib.mkIf (cfg.gpu_type == "amd") {
+      boot.initrd.kernelModules = ["amdgpu"];
+      boot.initrd.availableKernelModules = ["amdgpu"];
 
-    # Include all firmware (required for iGPU PSP, VCN, etc.)
-    hardware.firmware = with pkgs; [
-      linux-firmware
-      firmwareLinuxNonfree
-    ];
+      # Force loading amdgpu early and allow experimental features
+      boot.kernelParams = [
+        "amdgpu.ppfeaturemask=0xffffffff"
+        "amdgpu.gfxoff=0"
+        "amdgpu.tmz=0"
+      ];
 
-    hardware.opengl = {
-      enable = true;
-      #driSupport = true;
-      driSupport32Bit = true;
-      extraPackages = with pkgs; [vaapiVdpau libvdpau-va-gl];
-    };
+      # Include all firmware (required for iGPU PSP, VCN, etc.)
+      hardware.firmware = with pkgs; [
+        linux-firmware
+        firmwareLinuxNonfree
+      ];
 
-    # hardware.firmware = [
-    #   pkgs.linux-firmware
-    #   (pkgs.runCommand "custom-amdgpu-firmware" {
-    #     nativeBuildInputs = [ pkgs.zstd ];
-    #   } ''
-    #     mkdir -p $out/lib/firmware/amdgpu
-    #     zstd -d ${pkgs.linux-firmware}/lib/firmware/amdgpu/psp_13_0_4_toc.bin.zst -o $out/lib/firmware/amdgpu/psp_13_0_4_toc.bin
-    #     zstd -d ${pkgs.linux-firmware}/lib/firmware/amdgpu/psp_13_0_4_ta.bin.zst -o $out/lib/firmware/amdgpu/psp_13_0_4_ta.bin
-    #   '')
-    # ];
+      environment.systemPackages = with pkgs; [
+        radeontop
+      ];
+    })
 
-    environment.systemPackages = with pkgs; [
-      ffmpeg-full
-      glxinfo
-      libva
-      libva-utils
-      libvdpau-va-gl
-      mesa
-      mesa.drivers
-      radeontop
-      vaapiVdpau
-      vulkan-tools
-    ];
-  };
+    ####################################
+    # NVIDIA GPU
+    ####################################
+    (lib.mkIf (cfg.gpu_type == "nvidia") {
+      # Use the proprietary NVIDIA driver
+      services.xserver.videoDrivers = ["nvidia"];
+
+      # Disable nouveau to avoid conflicts
+      boot.blacklistedKernelModules = ["nouveau"];
+
+      hardware.nvidia = {
+        modesetting.enable = true;
+        powerManagement.enable = true;
+        powerManagement.finegrained = false;
+
+        # Set to true if you have a GPU that supports the open kernel driver,
+        # otherwise leave as false.
+        open = false;
+
+        # Adds the nvidia-settings GUI tool (harmless on a server)
+        nvidiaSettings = true;
+
+        # Optional: explicitly pick a package version
+        # package = config.boot.kernelPackages.nvidiaPackages.stable;
+      };
+
+      #      environment.systemPackages = with pkgs; [
+      #        nvidia-smi
+      #      ];
+    })
+
+    ####################################
+    # Software-only (no GPU)
+    ####################################
+    (lib.mkIf (cfg.gpu_type == "software") {
+      # Nothing special; you could explicitly avoid any GPU-specific config here
+      # or add software-rendering-only tools if you want.
+    })
+  ]);
 }

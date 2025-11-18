@@ -24,6 +24,9 @@ class NixSettings:
     internal_network_ip: Optional[str] = None
     internal_network_cidr: Optional[int] = None
 
+    # uefi or bios
+    boot_mode: str = "bios"
+
     # Cloud-init
     cloud_init: Optional[dict[str, Any]] = None
 
@@ -38,8 +41,7 @@ class NixSettings:
     gpu_type: GpuType = GpuType.SOFTWARE
 
     # Setup GOW Wolf
-    gow_wolf_enable: bool = False
-    gow_wolf_gpu_type: GpuType = GpuType.SOFTWARE
+    gow_wolf: Optional[dict[str, Any]] = None
 
     # Fileserver settings
     samba_server: Optional[dict[str, Any]] = None

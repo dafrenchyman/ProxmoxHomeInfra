@@ -48,87 +48,98 @@ in {
           "/dev/dri"
           "/dev/nvidia-uvm"
           "/dev/nvidia-uvm-tools"
-          "/dev/nvidia-caps/nvidia-cap1"
-          "/dev/nvidia-caps/nvidia-cap2"
+          #"/dev/nvidia-caps/nvidia-cap1"
+          #"/dev/nvidia-caps/nvidia-cap2"
           "/dev/nvidiactl"
           "/dev/nvidia0"
           "/dev/nvidia-modeset"
         ]
         else [];
 
+      wolfEnvironmentBase = [
+        "XDG_RUNTIME_DIR=/tmp/sockets"
+        "HOST_APPS_STATE_FOLDER=/etc/wolf"
+        "WOLF_SOCKET_PATH=/var/run/wolf/wolf.sock"
+      ];
+
       wolfEnvironment =
-        if cfg.gpu_type == "software"
-        then [
-          "WOLF_RENDER_NODE=software"
-        ]
-        else [];
+        wolfEnvironmentBase
+        ++ (
+          if cfg.gpu_type == "software"
+          then [
+            "WOLF_RENDER_NODE=software"
+          ]
+          else if cfg.gpu_type == "nvidia"
+          then [
+            "NVIDIA_DRIVER_VOLUME_NAME=nvidia-driver-vol"
+          ]
+          else []
+        );
 
       wolfVolumes =
-        if cfg.gpu_type == "nvidia"
-        then [
-          "nvidia-driver-vol:/usr/nvidia:rw"
-        ]
-        else [];
+        (
+          if cfg.gpu_type == "nvidia"
+          then ["nvidia-driver-vol:/usr/nvidia:rw"]
+          else []
+        )
+        ++ [
+          "/etc/wolf/:/etc/wolf:rw"
+          "/tmp/sockets:/tmp/sockets:rw"
+          "/var/run/docker.sock:/var/run/docker.sock:rw"
+          "/dev/:/dev/:rw"
+          "/run/udev:/run/udev:rw"
+          "/var/run/wolf:/var/run/wolf:rw"
+        ];
 
-      nvidiaVolume =
+      # TOP-LEVEL volumes (for nvidia)
+      nvidiaTopLevelVolumes =
         if cfg.gpu_type == "nvidia"
         then {
           volumes = {
-            nvidia-driver-vol = {
+            "nvidia-driver-vol" = {
               external = true;
             };
           };
         }
         else {};
 
-      dockerComposeConfig = {
-        version = "3";
-        services.wolf =
-          {
-            image = "ghcr.io/games-on-whales/wolf:sha-90c8806";
-            environment =
-              wolfEnvironment
-              ++ [
-                "XDG_RUNTIME_DIR=/tmp/sockets"
-                "HOST_APPS_STATE_FOLDER=/etc/wolf"
-                "WOLF_SOCKET_PATH=/var/run/wolf/wolf.sock" # Wolf Manager
+      dockerComposeConfig =
+        {
+          version = "3";
+          services = {
+            wolf = {
+              #image = "ghcr.io/games-on-whales/wolf:sha-90c8806";
+              image = "ghcr.io/games-on-whales/wolf:sha-2984c2b";
+              environment = wolfEnvironment;
+              volumes = wolfVolumes;
+              device_cgroup_rules = ["c 13:* rmw"];
+              devices =
+                wolfDevices
+                ++ [
+                  "/dev/uinput"
+                  "/dev/uhid"
+                ];
+              network_mode = "host";
+              restart = "unless-stopped";
+            };
+
+            wolfmanager = {
+              image = "ghcr.io/games-on-whales/wolfmanager/wolfmanager:latest";
+              ports = ["3000:3000"];
+              environment = [
+                "NODE_ENV=debug"
+                "NEXTAUTH_URL=${cfg.wolf_url}"
               ];
-            volumes =
-              wolfVolumes
-              ++ [
-                "/etc/wolf/:/etc/wolf"
-                "/tmp/sockets:/tmp/sockets:rw"
-                "/var/run/docker.sock:/var/run/docker.sock:rw"
-                "/dev/:/dev/:rw"
-                "/run/udev:/run/udev:rw"
-                "/var/run/wolf:/var/run/wolf" # Wolf Manager
+              volumes = [
+                "/var/run/wolf:/var/run/wolf"
+                "/var/run/docker.sock:/var/run/docker.sock"
+                "/etc/wolf/manager/config:/app/config"
               ];
-            device_cgroup_rules = ["c 13:* rmw"];
-            devices =
-              wolfDevices
-              ++ [
-                "/dev/uinput"
-                "/dev/uhid"
-              ];
-            network_mode = "host";
-            restart = "unless-stopped";
-          }
-          // nvidiaVolume; # Merge conditionally
-        services.wolfmanager = {
-          image = "ghcr.io/games-on-whales/wolfmanager/wolfmanager:latest";
-          ports = ["3000:3000"];
-          environment = [
-            "NODE_ENV=debug"
-            "NEXTAUTH_URL=${cfg.wolf_url}"
-          ];
-          volumes = [
-            "/var/run/wolf:/var/run/wolf" # Mount Wolf socket
-            "/var/run/docker.sock:/var/run/docker.sock" # Mount Docker socket
-            "/etc/wolf/manager/config:/app/config" # Persist config directory
-          ];
-          restart = "unless-stopped";
-        };
-      };
+              restart = "unless-stopped";
+            };
+          };
+        }
+        // nvidiaTopLevelVolumes; # merge nvidia named volume at ROOT level
     in {
       #######################################################
       # GOW - Wolf Setup
@@ -232,11 +243,11 @@ in {
             MARKER=/etc/wolf/.nvidia-driver-vol-ready
 
             # Not sure if this "NVIDIA_CAPS" is needed
-            NVIDIA_CAPS=/dev/nvidia-caps
-            if [ ! -d "$NVIDIA_CAPS" ]; then
-              echo "Building NVIDIA-CAPS"
-              nvidia-container-cli --load-kmods info
-            fi
+            #NVIDIA_CAPS=/dev/nvidia-caps
+            #if [ ! -d "$NVIDIA_CAPS" ]; then
+            #  echo "Building NVIDIA-CAPS"
+            #  nvidia-container-cli --load-kmods info
+            #fi
 
             if [ -f "$MARKER" ]; then
               echo "NVIDIA driver volume already built. Skipping."

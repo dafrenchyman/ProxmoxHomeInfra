@@ -113,6 +113,8 @@ class ProxmoxBase(pulumi.ComponentResource):
         # Download GPU Roms
         self._copy_gpu_rom_images(resource_name_prefix, self.pulumi_connection)
 
+        # Create proxmox monitor user
+
         # clean it all up
         outputs = {
             "proxmox_ip": self.proxmox_ip,

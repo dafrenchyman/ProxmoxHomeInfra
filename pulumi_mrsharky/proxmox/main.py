@@ -40,7 +40,11 @@ def main():
     # )
     # proxmox.remove_drive_from_vm(node_name="pve", vm_id=100, interface="scsi1")
 
-    proxmox.start_vm(node_name="pve", vm_id=100)
+    proxmox.create_group("test")
+    proxmox.create_user_api(userid="test", realm="pam", groups="test")
+    proxmox.create_api_token(userid="test", realm="pam", token_id="test")
+
+    # proxmox.start_vm(node_name="pve", vm_id=100)
 
 
 if __name__ == "__main__":
