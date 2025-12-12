@@ -6,6 +6,13 @@
 }: let
   cfg = config.extraServices.single_node_k3s;
 
+  # Helper method to indent strings
+  indent = n: s: let
+    pad = builtins.concatStringsSep "" (builtins.genList (_: " ") n);
+  in
+    # prefix first line, and after every newline
+    pad + builtins.replaceStrings ["\n"] ["\n${pad}"] s;
+
   # #######################
   # Ingress
   # #######################
@@ -103,9 +110,66 @@
       ca:
         secretName: ca-root-cert-secret
   '';
+
+  # #######################
+  # MetalLB
+  # #######################
+
+  # Namespace
+  metallbNamespace = pkgs.writeText "00-metallb-namespace.yaml" ''
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: metallb-system
+  '';
+
+  # HelmChart
+  metallbHelmChart = pkgs.writeText "10-metallb-helmchart.yaml" ''
+    apiVersion: helm.cattle.io/v1
+    kind: HelmChart
+    metadata:
+      name: metallb
+      namespace: kube-system
+    spec:
+      repo: https://metallb.github.io/metallb
+      chart: metallb
+      version: 0.15.3
+      targetNamespace: metallb-system
+      valuesContent: |
+        crds:
+          enabled: true
+  '';
+
+  # The below didn't work for generating the address block (although it seems cleaner
+  # ${indent 8 (lib.generators.toYAML {} cfg.addresses)}
+
+  # Build the addresses block as dash-prefixed lines (this does seem to work)
+  addressesBlock = indent 4 (builtins.concatStringsSep "\n" (map (a: "- " + a) cfg.addresses));
+
+  # ADD: IPAddressPool + L2Advertisement (Layer2 ARP)
+  metallbPool = pkgs.writeText "20-metallb-address-pool.yaml" ''
+    apiVersion: metallb.io/v1beta1
+    kind: IPAddressPool
+    metadata:
+      name: ${cfg.poolName}
+      namespace: metallb-system
+    spec:
+      addresses:
+    ${addressesBlock}
+    ---
+    apiVersion: metallb.io/v1beta1
+    kind: L2Advertisement
+    metadata:
+      name: ${cfg.poolName}-l2
+      namespace: metallb-system
+    spec:
+      ipAddressPools:
+        - ${cfg.poolName}
+  '';
 in {
   imports = [
     ./airsonic.nix
+    ./gitea.nix
     ./homepage.nix
     ./komga.nix
     ./monitoring.nix
@@ -140,11 +204,6 @@ in {
       example = "nixkube.home.arpa";
     };
 
-    ip_address = lib.mkOption {
-      type = lib.types.str;
-      example = "192.168.1.51";
-    };
-
     nameserver_ip = lib.mkOption {
       type = lib.types.str;
       default = "192.168.10.1";
@@ -155,6 +214,24 @@ in {
       type = lib.types.int;
       default = 6443;
       example = 6443;
+    };
+
+    # MetalLB Options
+    poolName = lib.mkOption {
+      type = lib.types.str;
+      default = "pool1";
+      description = "Name for the MetalLB IPAddressPool.";
+    };
+
+    # List of CIDR blocks or start-end ranges as strings
+    addresses = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = ["192.168.10.51-192.168.10.54"];
+      example = ["192.168.10.50-192.168.10.60" "192.168.10.70/32"];
+      description = ''
+        Address ranges MetalLB can hand out (e.g. "192.168.10.50-192.168.10.60" or "192.168.10.70/32").
+        These must be on the same L2 network as your nodes.
+      '';
     };
   };
 
@@ -252,6 +329,7 @@ in {
       extraFlags = [
         # Disable built-in Traefik (we use ingress-nginx)
         "--disable=traefik"
+        # Disable built-in k3s load balancer (klipper)
         "--disable=servicelb"
         # Bind API to your chosen port/IP and add SANs for hostname + IP
         "--https-listen-port=${toString cfg.api_server_port}"
@@ -276,6 +354,11 @@ in {
       "L+ /var/lib/rancher/k3s/server/manifests/cert-manager-namespace.yaml - - - - ${certManagerNamespace}"
       "L+ /var/lib/rancher/k3s/server/manifests/cert-manager.yaml - - - - ${certManagerHelmChart}"
       "L+ /var/lib/rancher/k3s/server/manifests/cert-manager-issuers.yaml - - - - ${certManagerIssuers}"
+
+      # MetalLB
+      "L+ /var/lib/rancher/k3s/server/manifests/00-metallb-namespace.yaml - - - - ${metallbNamespace}"
+      "L+ /var/lib/rancher/k3s/server/manifests/10-metallb-helmchart.yaml - - - - ${metallbHelmChart}"
+      "L+ /var/lib/rancher/k3s/server/manifests/20-metallb-address-pool.yaml - - - - ${metallbPool}"
     ];
 
     # Tip for future multi-node:

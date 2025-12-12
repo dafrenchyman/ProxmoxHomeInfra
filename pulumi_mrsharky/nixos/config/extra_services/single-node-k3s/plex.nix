@@ -483,14 +483,14 @@ in {
 
     plex_claim = lib.mkOption {
       type = lib.types.str;
-      default = null;
+      default = "";
       example = "claim-xxxxx";
       description = "Plex claim if needed (https://account.plex.tv/claim)";
     };
 
     token = lib.mkOption {
       type = lib.types.str;
-      default = null;
+      default = "";
       example = "your-token";
       description = "Client Token";
     };

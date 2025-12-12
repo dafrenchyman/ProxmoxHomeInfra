@@ -285,7 +285,7 @@
               gethomepage.dev/icon: prometheus.png
               gethomepage.dev/description: Metrics
               gethomepage.dev/href: https://${cfg.prometheus_subdomain}.${parent.full_hostname}/
-              gethomepage.dev/siteMonitor: http://prometheus-server.default.svc.cluster.local:9090
+              gethomepage.dev/siteMonitor: http://prometheus-server.default.svc.cluster.local
               gethomepage.dev/pod-selector: app.kubernetes.io/name=prometheus
             hosts:
               - ${cfg.prometheus_subdomain}.${parent.full_hostname}
@@ -299,6 +299,25 @@
         pushgateway:
           enabled: false
   '';
+
+  # Kubernetes Grafana Dashboard
+  dashboardJson = builtins.readFile ./dashboards/kubernetes.json;
+
+  # Replace the placeholder wherever it appears (panel.datasource, templating, etc.)
+  dashboardJsonFixed = lib.strings.replaceStrings ["\${DS_PROMETHEUS}"] ["prometheus"] dashboardJson;
+  kubernetesDashboardConfigMap = {
+    apiVersion = "v1";
+    kind = "ConfigMap";
+    metadata = {
+      name = "kubernetes-dashboard";
+      namespace = "default";
+      labels.grafana_dashboard = "1";
+      annotations.grafana_folder = "Kubernetes";
+    };
+    data."kubernetes.json" = dashboardJsonFixed;
+  };
+  cmYaml = lib.generators.toYAML {} kubernetesDashboardConfigMap;
+  kubernetesGrafanaDashboard = pkgs.writeText "30-kubernetes-grafana-dashboard.yaml" cmYaml;
 in {
   options.extraServices.single_node_k3s.monitoring = {
     enable = lib.mkEnableOption "Prometheus + Grafana monitoring stack";
@@ -366,6 +385,7 @@ in {
         "L+ /var/lib/rancher/k3s/server/manifests/10-prometheus-helmchart.yaml - - - - ${prometheusHelmChart}"
         "L+ /var/lib/rancher/k3s/server/manifests/20-grafana-cert.yaml - - - - ${grafanaCert}"
         "L+ /var/lib/rancher/k3s/server/manifests/20-prometheus-cert.yaml - - - - ${prometheusCert}"
+        "L+ /var/lib/rancher/k3s/server/manifests/30-kubernetes-grafana-dashboard.yaml - - - - ${kubernetesGrafanaDashboard}"
 
         # Ensure host paths exist (owned by your chosen uid/gid)
         "d ${cfg.grafana_storage_path}     0755 ${toString cfg.uid} ${toString cfg.gid} -"
@@ -381,6 +401,7 @@ in {
         "r /var/lib/rancher/k3s/server/manifests/10-prometheus-helmchart.yaml"
         "r /var/lib/rancher/k3s/server/manifests/20-grafana-cert.yaml"
         "r /var/lib/rancher/k3s/server/manifests/20-prometheus-cert.yaml"
+        "r /var/lib/rancher/k3s/server/manifests/30-kubernetes-grafana-dashboard.yaml"
       ];
     })
   ];

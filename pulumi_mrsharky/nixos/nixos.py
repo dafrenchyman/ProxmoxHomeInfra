@@ -142,7 +142,10 @@ class NixosBase:
             ),
         )
 
-        if settings.kube_single_node_enable:
+        single_node_k3s = (settings.to_dict().get("single_node_k3s", {}) or {}).get(
+            "enable", False
+        )
+        if single_node_k3s or settings.kube_single_node_enable:
             if domain_name is None:
                 raise Exception("domain_name required if setting up Kubernetes")
 
@@ -150,6 +153,10 @@ class NixosBase:
                 f"{settings.kube_nix_hostname}.{domain_name}"
             )
             ip_address = settings.kube_master_ip
+
+            is_k3s = False
+            if single_node_k3s:
+                is_k3s = True
 
             # Generate the config file and return as string
             # Kube config file can be found in: /etc/rancher/k3s/k3s.yaml on server
@@ -161,6 +168,7 @@ class NixosBase:
                     ssh_host=self.pulumi_connection.host,
                     kubectl_api_url=f"https://{ip_address}:6443",
                     ssh_private_key=self.pulumi_connection.private_key,
+                    is_k3s=is_k3s,
                 ),
                 opts=pulumi.ResourceOptions(
                     parent=self.rebuild_switch,

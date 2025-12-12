@@ -316,6 +316,28 @@ class RemoteMethods:
         return results
 
     @staticmethod
+    def get_file_contents(ssh: SSHClient, filename: str):
+        command_to_run = f"""
+            FILE="{filename}"
+            if [[ -f "$FILE" ]]; then
+                echo "True"
+            else
+                echo ""
+            fi
+        """
+
+        detect_file = ssh.exec_command(command_to_run)
+        cmdline_file_exists = not bool(detect_file[1].read().decode("ascii").strip())
+
+        if cmdline_file_exists:
+            raise Exception(f"File '{filename}' doesn't exist")
+
+        cmd = rf"sudo cat {filename}"
+        raw_results = ssh.exec_command(cmd)
+        results = raw_results[1].read().decode("ascii")
+        return results
+
+    @staticmethod
     def base64_file(ssh: SSHClient, filename: str):
         command_to_run = f"""
             FILE="{filename}"
@@ -398,4 +420,31 @@ users:
     client-key-data: {cluster_admin_key}
 
         """
+        return kubectl_config
+
+    @staticmethod
+    def get_kubectl_config_from_k3(
+        ssh_host: Optional[Input[str]],
+        ssh_user: Optional[Input[str]],
+        ssh_port: Optional[Input[int]],
+        kubectl_api_url: Optional[Input[str]],
+        ssh_password: Optional[Input[str]] = None,
+        ssh_private_key: Optional[Input[str]] = None,
+    ) -> str:
+        # Connect using the proper creds
+        ssh = RemoteMethods.ssh_connection(
+            host=ssh_host,
+            user=ssh_user,
+            port=ssh_port,
+            password=ssh_password,
+            private_key=ssh_private_key,
+        )
+
+        # K3s makes it easy, file is available to download
+        kubectl_config = RemoteMethods.get_file_contents(
+            ssh, r"/etc/rancher/k3s/k3s.yaml"
+        )
+
+        # Need to replace the server url to the correct one for remote connections
+        kubectl_config.replace("https://127.0.0.1:6443", kubectl_api_url)
         return kubectl_config

@@ -30,7 +30,7 @@ debugpy==1.8.14
     # via pulumi
 dill==0.4.0
     # via pulumi
-grpcio==1.66.2
+grpcio==1.76.0
     # via pulumi
 idna==3.10
     # via requests
@@ -50,11 +50,11 @@ parver==0.5
     #   pulumi-kubernetes
     #   pulumi-kubernetes-ingress-nginx
     #   pulumi-tls
-protobuf==4.25.8
+protobuf==5.29.5
     # via pulumi
 proxmoxer==2.2.0
     # via -r requirements.in
-pulumi==3.181.0
+pulumi==3.192.0
     # via
     #   -r requirements.in
     #   pulumi-command
@@ -93,6 +93,8 @@ semver==3.0.4
     #   pulumi-kubernetes
     #   pulumi-kubernetes-ingress-nginx
     #   pulumi-tls
+typing-extensions==4.15.0
+    # via grpcio
 urllib3==2.5.0
     # via requests
 

@@ -13,6 +13,7 @@ class CreateConfigArgs(object):
     kubectl_api_url: Input[str]
     ssh_password: Optional[Input[str]]
     ssh_private_key: Optional[Input[str]]
+    is_k3s: Optional[Input[bool]]
 
     def __init__(
         self,
@@ -22,6 +23,7 @@ class CreateConfigArgs(object):
         ssh_port: Optional[Input[float]] = 22,
         ssh_password: Optional[Input[str]] = None,
         ssh_private_key: Optional[Input[str]] = None,
+        is_k3s: Optional[Input[bool]] = False,
     ) -> None:
         if ssh_host is None:
             raise Exception(f"{self.__class__.__name__}: ssh_host cannot be None")
@@ -36,6 +38,7 @@ class CreateConfigArgs(object):
         self.ssh_password = ssh_password
         self.ssh_private_key = ssh_private_key
         self.kubectl_api_url = kubectl_api_url
+        self.is_k3s = is_k3s
         return
 
 
@@ -48,22 +51,32 @@ class CreateConfigProvider(ResourceProvider):
             kubectl_api_url=props.get("kubectl_api_url"),
             ssh_password=props.get("ssh_password"),
             ssh_private_key=props.get("ssh_private_key"),
+            is_k3s=props.get("is_k3s"),
         )
         return arguments
 
     def create(self, props: Any):
         arguments = self._process_inputs(props)
 
-        # Run the reboot function that waits
         print("Creating kubectl config file")
-        kubectl_config = RemoteMethods.generate_kubectl_config(
-            ssh_host=arguments.ssh_host,
-            ssh_user=arguments.ssh_user,
-            ssh_port=arguments.ssh_port,
-            ssh_password=arguments.ssh_password,
-            ssh_private_key=arguments.ssh_private_key,
-            kubectl_api_url=arguments.kubectl_api_url,
-        )
+        if arguments.is_k3s:
+            kubectl_config = RemoteMethods.get_kubectl_config_from_k3(
+                ssh_host=arguments.ssh_host,
+                ssh_user=arguments.ssh_user,
+                ssh_port=arguments.ssh_port,
+                ssh_password=arguments.ssh_password,
+                ssh_private_key=arguments.ssh_private_key,
+                kubectl_api_url=arguments.kubectl_api_url,
+            )
+        else:
+            kubectl_config = RemoteMethods.generate_kubectl_config(
+                ssh_host=arguments.ssh_host,
+                ssh_user=arguments.ssh_user,
+                ssh_port=arguments.ssh_port,
+                ssh_password=arguments.ssh_password,
+                ssh_private_key=arguments.ssh_private_key,
+                kubectl_api_url=arguments.kubectl_api_url,
+            )
 
         if kubectl_config is None:
             raise Exception("generate_kubectl_config returned None")
