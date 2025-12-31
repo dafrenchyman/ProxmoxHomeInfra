@@ -169,6 +169,7 @@
 in {
   imports = [
     ./airsonic.nix
+    ./audiobookshelf.nix
     ./gitea.nix
     ./homepage.nix
     ./komga.nix
