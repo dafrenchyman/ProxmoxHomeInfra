@@ -109,7 +109,9 @@ in {
           services = {
             wolf = {
               #image = "ghcr.io/games-on-whales/wolf:sha-90c8806";
-              image = "ghcr.io/games-on-whales/wolf:sha-2984c2b";
+              #image = "ghcr.io/games-on-whales/wolf:sha-2984c2b";
+              image = "ghcr.io/games-on-whales/wolf:sha-ee27103";
+
               environment = wolfEnvironment;
               volumes = wolfVolumes;
               device_cgroup_rules = ["c 13:* rmw"];
@@ -124,7 +126,7 @@ in {
             };
 
             wolfmanager = {
-              image = "ghcr.io/games-on-whales/wolfmanager/wolfmanager:latest";
+              image = "ghcr.io/games-on-whales/wolfmanager/wolfmanager:202508.001";
               ports = ["3000:3000"];
               environment = [
                 "NODE_ENV=debug"
