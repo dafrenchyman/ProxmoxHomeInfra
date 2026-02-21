@@ -84,7 +84,8 @@ in {
     # Basic service enable
     services.ollama = {
       enable = true;
-      package = pkgs.ollama-cuda;
+      package = lib.mkForce pkgs.ollama-cuda;
+
       loadModels = [
         "llama3.1:8b"
         "qwen2.5-coder:7b"
@@ -93,44 +94,29 @@ in {
       # Bind to the chosen interface/port
       host = cfg.ollamaHost;
       port = cfg.ollamaPort;
-
-      # Persist models
-      #dataDir = cfg.ollamaDataDir;
-
-      # GPU note:
-      # On many nixpkgs versions, with NVIDIA drivers installed, Ollama will use CUDA.
-      # Some nixpkgs versions include an explicit option like:
-      #   acceleration = "cuda";
-      # If your build errors here, remove/adjust accordingly.
-      #
-      # acceleration = "cuda";
     };
 
     systemd.services.ollama.environment = {
       LD_LIBRARY_PATH = "/run/opengl-driver/lib:/run/opengl-driver-32/lib";
+      # Make Ollama prefer CUDA backend explicitly
+      OLLAMA_LLM_LIBRARY = "cuda";
+      # Optional: helps debugging
+      OLLAMA_DEBUG = "INFO";
     };
     # GPU
     services.xserver.videoDrivers = ["nvidia"];
     hardware.nvidia.modesetting.enable = true;
     hardware.opengl.enable = true; # (or hardware.graphics.enable on newer nixpkgs)
 
-    #    environment.systemPackages = [
-    #     (pkgs.ollama.override {
-    #        acceleration = "cuda";
-    #      })
-    #    ];
+    systemd.services.ollama.serviceConfig.SupplementaryGroups = lib.mkDefault [
+      "render"
+      "video"
+    ];
 
-    # Ensure NVIDIA stack is enabled (you likely already have this).
-    # Keep this block if this machine is the 3090 server.
-    # hardware.graphics.enable = lib.mkDefault true;
-    # services.xserver.videoDrivers = lib.mkDefault [ "nvidia" ];
-
-    # For container runtime convenience (Open WebUI container)
-    #virtualisation.podman = {
-    # enable = true;
-    # dockerCompat = true;
-    # defaultNetwork.settings.dns_enabled = true;
-    #};
+    systemd.services.ollama.serviceConfig.ExecStart = lib.mkForce [
+      ""
+      "${pkgs.ollama-cuda}/bin/ollama serve"
+    ];
 
     ##########################################################################
     # Firewall
@@ -152,23 +138,43 @@ in {
     # This runs after ollama is up and pulls models once per activation.
     # If you don’t want it, leave preloadModels = [].
     systemd.services.ollama-preload-models = lib.mkIf (cfg.preloadModels != []) {
-      description = "Preload Ollama models (best-effort)";
+      description = "Preload Ollama models (idempotent)";
       wantedBy = ["multi-user.target"];
       after = ["ollama.service"];
       requires = ["ollama.service"];
+
       serviceConfig = {
         Type = "oneshot";
-        RemainAfterExit = true;
+        User = "ollama";
+        Group = "ollama";
+        # WorkingDirectory = cfg.ollamaDataDir;
+
+        # Fix the panic:
+        Environment = [
+          "PATH=${lib.makeBinPath [pkgs.coreutils pkgs.gawk pkgs.gnugrep pkgs.gnused pkgs.curl pkgs.jq config.services.ollama.package]}"
+          "HOME=${cfg.ollamaDataDir}" # avoids the $HOME panic
+          "OLLAMA_HOST=127.0.0.1:${toString cfg.ollamaPort}"
+          "OLLAMA_MODELS=${cfg.ollamaDataDir}/models"
+        ];
       };
+
       script = let
-        pulls = lib.concatStringsSep "\n" (map (m: ''
-            echo "Pulling model: ${m}"
-            ${pkgs.ollama}/bin/ollama pull ${lib.escapeShellArg m} || true
-          '')
-          cfg.preloadModels);
+        ollama = "${config.services.ollama.package}/bin/ollama";
+        models = lib.concatStringsSep " " cfg.preloadModels;
       in ''
         set -euo pipefail
-        ${pulls}
+
+        echo "Checking existing Ollama models..."
+        existing="$(${ollama} list | awk 'NR>1 {print $1}')"
+
+        for model in ${models}; do
+          if echo "$existing" | grep -qx "$model"; then
+            echo "✔ Model already present: $model"
+          else
+            echo "⬇ Pulling missing model: $model"
+            ${ollama} pull "$model"
+          fi
+        done
       '';
     };
   };
