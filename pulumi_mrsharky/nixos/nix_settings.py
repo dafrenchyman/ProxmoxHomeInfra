@@ -36,6 +36,8 @@ class NixSettings:
     # Useful Desktop Apps
     desktop_apps_enable: bool = False
 
+    ollama_enable: bool = False
+
     # Setup GPU
     gpu_enable: bool = False
     gpu_type: GpuType = GpuType.SOFTWARE

@@ -320,6 +320,9 @@ in {
   # Setup Glances
   # extraServices.glances_with_prometheus.enable = settings.custom_glances_enable;
 
+  # Ollama
+  extraServices.ollama.enable = settings.ollama_enable;
+
   # Setup Samba Fileserver
   extraServices.samba_server = settings.samba_server;
 

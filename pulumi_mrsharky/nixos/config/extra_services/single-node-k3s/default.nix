@@ -166,15 +166,43 @@
       ipAddressPools:
         - ${cfg.poolName}
   '';
+
+  # #######################
+  # Cloud Native Postgres
+  # #######################
+
+  # Namespace
+  postgresCloudNativeNamespace = pkgs.writeText "00-postgres-cloud-native-namespace.yaml" ''
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: cnpg-system
+  '';
+
+  # Helm Chart
+  postgresCloudNativeHelmChart = pkgs.writeText "10-postgres-cloud-native-helmchart.yaml" ''
+    apiVersion: helm.cattle.io/v1
+    kind: HelmChart
+    metadata:
+      name: cloudnative-pg
+      namespace: kube-system
+    spec:
+      repo: https://cloudnative-pg.github.io/charts
+      chart: cloudnative-pg
+      version: 0.27.1
+      targetNamespace: cnpg-system
+  '';
 in {
   imports = [
     ./airsonic.nix
     ./audiobookshelf.nix
     ./gitea.nix
     ./homepage.nix
+    ./immich.nix
     ./komga.nix
     ./monitoring.nix
     ./nzbget.nix
+    ./open-webui.nix
     ./plex.nix
     ./termix.nix
     ./transmission-openvpn.nix
@@ -360,6 +388,10 @@ in {
       "L+ /var/lib/rancher/k3s/server/manifests/00-metallb-namespace.yaml - - - - ${metallbNamespace}"
       "L+ /var/lib/rancher/k3s/server/manifests/10-metallb-helmchart.yaml - - - - ${metallbHelmChart}"
       "L+ /var/lib/rancher/k3s/server/manifests/20-metallb-address-pool.yaml - - - - ${metallbPool}"
+
+      # Cloudnative Postgres
+      "L+ /var/lib/rancher/k3s/server/manifests/00-postgres-cloud-native-namespace.yaml - - - - ${postgresCloudNativeNamespace}"
+      "L+ /var/lib/rancher/k3s/server/manifests/10-postgres-cloud-native-helmchart.yaml - - - - ${postgresCloudNativeHelmChart}"
     ];
 
     # Tip for future multi-node:

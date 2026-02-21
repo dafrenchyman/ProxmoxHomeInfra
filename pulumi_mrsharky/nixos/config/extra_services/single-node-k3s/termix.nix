@@ -124,7 +124,7 @@
               gethomepage.dev/group: Tools
               gethomepage.dev/name: Termix
               gethomepage.dev/description: SSH terminal, tunneling, and remote file management
-              gethomepage.dev/icon: terminal.png
+              gethomepage.dev/icon: termix.png
               gethomepage.dev/siteMonitor: http://termix.default.svc.cluster.local:8080
             hosts:
               - host: ${cfg.subdomain}.${parent.full_hostname}

@@ -221,7 +221,7 @@
           - name: OPENVPN_OPTS
             value: "--inactive 3600 --ping 10 --ping-exit 60 --mute-replay-warnings"
           - name: TRANSMISSION_DOWNLOAD_QUEUE_SIZE
-            value: "500"
+            value: "600"
           - name: TRANSMISSION_PREALLOCATION
             value: "0"
           - name: TRANSMISSION_RATIO_LIMIT
@@ -229,7 +229,7 @@
           - name: TRANSMISSION_RATIO_LIMIT_ENABLED
             value: "true"
           - name: TRANSMISSION_SPEED_LIMIT_UP
-            value: "50"
+            value: "500"
           - name: TRANSMISSION_SPEED_LIMIT_UP_ENABLED
             value: "true"
           - name: TRANSMISSION_ALT_SPEED_TIME_ENABLED
@@ -241,7 +241,7 @@
           - name: TRANSMISSION_ALT_SPEED_UP
             value: "100"
           - name: TRANSMISSION_ALT_SPEED_DOWN
-            value: "10000"
+            value: "100000"
           - name: TRANSMISSION_SEED_QUEUE_SIZE
             value: "10"
           - name: TRANSMISSION_SEED_QUEUE_ENABLED
@@ -356,21 +356,18 @@
             type: deployment
             replicas: 1
             strategy: Recreate
-
             pod:
               annotations:
                 prometheus.io/scrape: "true"
                 prometheus.io/port: "19091"
                 prometheus.io/path: "/metrics"
                 prometheus.io/scheme: "http"
-
             containers:
               app:
                 image:
                   repository: metalmatze/transmission-exporter
                   tag: latest
                   pullPolicy: IfNotPresent
-
                 env:
                   - name: WEB_PATH
                     value: "/metrics"
@@ -384,12 +381,10 @@
                     value: "${cfg.transmission_password}"
                   - name: TZ
                     value: "${config.time.timeZone}"
-
                 ports:
                   - name: metrics
                     containerPort: 19091
                     protocol: TCP
-
         service:
           main:
             enabled: true

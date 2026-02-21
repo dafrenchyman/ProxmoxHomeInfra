@@ -14,6 +14,7 @@
     ./gpu.nix
     ./mount-multiple-smb-shares.nix
     ./mount-smb-shares.nix
+    ./ollama.nix
     ./single-node-kube.nix
   ];
 }
