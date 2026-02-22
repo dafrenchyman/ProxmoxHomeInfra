@@ -115,31 +115,38 @@
           bookmarks:
             - Communications:
                 - Discord:
-                    - icon: discord.png
+                    - icon: discord.svg
                       href: https://discord.com
                 - Gmail:
-                    - icon: gmail.png
+                    - icon: gmail.svg
                       href: https://mail.google.com
                 - Gmail Calendar:
-                    - icon: google-calendar.png
+                    - icon: google-calendar.svg
                       href: https://calendar.google.com
             - Developer:
                 - ChatGPT:
-                    - icon: chatgpt
+                    - icon: chatgpt.svg
                       href: https://chatgpt.com
                 - Github:
                     - icon: github.png
                       href: https://github.com
             - Home:
                 - Google Photos:
-                    - icon: google-photos.png
+                    - icon: google-photos.svg
                       href: https://photos.google.com
                 - Google Maps:
-                    - icon: google-maps.png
+                    - icon: google-maps.svg
                       href: https://maps.google.com
                 - Olympia Garbage and Recycling:
                     - abbr: ♻️
                       href: https://www.olympiawa.gov/services/garbage___recycling/index.php
+            - Homepage:
+                - Dashboard Icons:
+                    - icon: homarr.svg
+                      href: https://dashboardicons.com/icons
+                - Emojis:
+                    - abbr: 💩
+                      href: https://www.emojiall.com/en
             - NixOS:
                 - Package Search:
                     - icon: nixos.png

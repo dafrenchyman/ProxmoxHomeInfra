@@ -104,7 +104,7 @@
               nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
               # homepage auto discovery (optional)
               gethomepage.dev/enabled: "true"
-              gethomepage.dev/group: Media
+              gethomepage.dev/group: Media - Books
               gethomepage.dev/name: Komga
               gethomepage.dev/description: E-Book Reader
               gethomepage.dev/icon: komga.png

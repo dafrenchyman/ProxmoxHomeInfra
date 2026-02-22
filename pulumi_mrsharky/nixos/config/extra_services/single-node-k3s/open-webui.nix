@@ -134,11 +134,11 @@
             annotations:
               nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
               gethomepage.dev/enabled: "true"
-              gethomepage.dev/group: AI
+              gethomepage.dev/group: Artificial Intelligence
               gethomepage.dev/name: Open WebUI
               gethomepage.dev/description: Local LLM Chat UI
               gethomepage.dev/icon: open-webui.png
-              gethomepage.dev/siteMonitor: http://open-webui.default.svc.cluster.local:8080
+              gethomepage.dev/siteMonitor: http://chat.default.svc.cluster.local:8080
             host: ${cfg.subdomain}.${parent.full_hostname}
             additionalHosts:
               - ${cfg.subdomain}.${parent.node_master_ip}.nip.io
@@ -178,7 +178,7 @@ in {
     # Open WebUI chart config
     openwebui_chart_version = lib.mkOption {
       type = lib.types.str;
-      default = "12.0.1";
+      default = "12.3.0";
       description = "Open WebUI chart version to install (pin for reproducibility).";
     };
 

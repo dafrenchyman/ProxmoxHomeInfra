@@ -117,9 +117,9 @@
               nginx.ingress.kubernetes.io/ssl-redirect: "false"
               # homepage auto discovery (optional)
               gethomepage.dev/enabled: "true"
-              gethomepage.dev/group: Media
+              gethomepage.dev/group: Media - Books
               gethomepage.dev/name: Audiobookshelf
-              gethomepage.dev/description: Audiobooks & Podcasts
+              gethomepage.dev/description: A self-hosted web application that allows users to organize, stream, and download their audiobook collections from various sources, such as Librivox, Open Library, and personal collections.
               gethomepage.dev/icon: audiobookshelf.png
               gethomepage.dev/siteMonitor: http://audiobookshelf.default.svc.cluster.local:80
 

@@ -184,7 +184,7 @@
               gethomepage.dev/enabled: "true"
               gethomepage.dev/group: Media
               gethomepage.dev/name: Airsonic Advanced
-              gethomepage.dev/description:  Web-based media streaming server
+              gethomepage.dev/description: A self-hosted web-based media streaming application that allows users to stream audio files from their local libraries to various devices, including smartphones, tablets, and home stereos.
               gethomepage.dev/icon: airsonic.png
               gethomepage.dev/href: https://${cfg.subdomain}.${parent.full_hostname}/
               gethomepage.dev/siteMonitor: http://airsonic.default.svc.cluster.local:4040

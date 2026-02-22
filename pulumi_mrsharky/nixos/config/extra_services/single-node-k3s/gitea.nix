@@ -272,7 +272,7 @@
             gethomepage.dev/enabled: "true"
             gethomepage.dev/group: Tools
             gethomepage.dev/name: Gitea
-            gethomepage.dev/description: Git
+            gethomepage.dev/description: An open-source, self-hosted Git repository management system that allows users to create, manage, and collaborate on software projects in a similar manner to GitHub or GitLab.
             gethomepage.dev/icon: gitea.png
             gethomepage.dev/widget.type: gitea
             gethomepage.dev/widget.url: http://gitea-http.default.svc.cluster.local:3000

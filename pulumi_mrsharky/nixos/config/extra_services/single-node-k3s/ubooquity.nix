@@ -184,7 +184,7 @@
               nginx.ingress.kubernetes.io/app-root: /ubooquity
               # homepage auto discovery
               gethomepage.dev/enabled: "true"
-              gethomepage.dev/group: Media
+              gethomepage.dev/group: Media - Books
               gethomepage.dev/name: Ubooquity
               gethomepage.dev/description:  Digital Bookshelf
               gethomepage.dev/icon: ubooquity.png
@@ -219,7 +219,7 @@
               nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
               nginx.ingress.kubernetes.io/app-root: /ubooquity
               gethomepage.dev/enabled: "true"
-              gethomepage.dev/group: Media
+              gethomepage.dev/group: Media - Books
               gethomepage.dev/name: Ubooquity - Administration
               gethomepage.dev/description:  Digital Bookshelf - Admin Portal
               gethomepage.dev/icon: ubooquity.png

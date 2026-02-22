@@ -298,7 +298,7 @@
         gethomepage.dev/enabled: "true"
         gethomepage.dev/group: Download
         gethomepage.dev/name: Transmission via OpenVPN
-        gethomepage.dev/description: Torrent Downloader over VPN
+        gethomepage.dev/description: A free, open-source BitTorrent client for downloading large files over peer-to-peer networks, often used for sharing or accessing large media files such as movies and TV shows.
         gethomepage.dev/icon: transmission.png
         gethomepage.dev/href: https://${cfg.subdomain}.${parent.full_hostname}/
         gethomepage.dev/pod-selector: app=transmission-openvpn
