@@ -7,6 +7,34 @@
   cfg = config.extraServices.single_node_k3s.homepage;
   parent = config.extraServices.single_node_k3s;
 
+  # Indent every non-empty line by N spaces (portable across nixpkgs versions)
+  indentN = n: s: let
+    pad = builtins.concatStringsSep "" (builtins.genList (_: " ") n);
+    lines = builtins.split "\n" s;
+    indented = map (line:
+      if line == ""
+      then ""
+      else pad + line)
+    lines;
+  in
+    builtins.concatStringsSep "\n" indented;
+
+  # Convert "attrset-of-attrsets" into Homepage's expected YAML structure:
+  # [
+  #   { Group = [ { Name = [ { icon=...; href=...; } ]; } ... ]; }
+  # ]
+  homepageBookmarks =
+    builtins.map
+    (groupName: {
+      ${groupName} =
+        builtins.map
+        (entryName: {${entryName} = [cfg.bookmarks.${groupName}.${entryName}];})
+        (builtins.attrNames cfg.bookmarks.${groupName});
+    })
+    (builtins.attrNames cfg.bookmarks);
+
+  bookmarksYaml = indentN 12 (lib.generators.toYAML {} homepageBookmarks);
+
   # Cert
   homepageCert = pkgs.writeText "20-homepage-cert.yaml" ''
     apiVersion: cert-manager.io/v1
@@ -112,61 +140,7 @@
 
           # To use an existing ConfigMap uncomment this line and specify the name
           # useExistingConfigMap: existing-homepage-configmap
-          bookmarks:
-            - Communications:
-                - Discord:
-                    - icon: discord.svg
-                      href: https://discord.com
-                - Gmail:
-                    - icon: gmail.svg
-                      href: https://mail.google.com
-                - Gmail Calendar:
-                    - icon: google-calendar.svg
-                      href: https://calendar.google.com
-            - Developer:
-                - ChatGPT:
-                    - icon: chatgpt.svg
-                      href: https://chatgpt.com
-                - Github:
-                    - icon: github.png
-                      href: https://github.com
-            - Home:
-                - Google Photos:
-                    - icon: google-photos.svg
-                      href: https://photos.google.com
-                - Google Maps:
-                    - icon: google-maps.svg
-                      href: https://maps.google.com
-                - Olympia Garbage and Recycling:
-                    - abbr: ♻️
-                      href: https://www.olympiawa.gov/services/garbage___recycling/index.php
-            - Homepage:
-                - Dashboard Icons:
-                    - icon: homarr.svg
-                      href: https://dashboardicons.com/icons
-                - Emojis:
-                    - abbr: 💩
-                      href: https://www.emojiall.com/en
-            - NixOS:
-                - Package Search:
-                    - icon: nixos.png
-                      href: https://search.nixos.org/packages
-                - Options Search:
-                    - icon: nixos.png
-                      href: https://search.nixos.org/options
-                - Home Manager Options:
-                    - icon: nixos.png
-                      href: https://home-manager-options.extranix.com
-                - Package Version:
-                    - icon: nixos.png
-                      href: https://lazamar.co.uk/nix-versions/
-            - Shopping:
-                - Amazon:
-                    - icon: amazon.png
-                      href: https://amazon.com
-                - Ebay:
-                    - icon: ebay.png
-                      href: https://ebay.com
+          bookmarks: ${bookmarksYaml}
           services:
             - Compute:
                 - Proxmox:
@@ -247,6 +221,29 @@ in {
       example = "/mnt/kube/config/homepage/logs";
       default = "/mnt/kube/config/homepage/logs";
       description = "Path where configuration data will be saved";
+    };
+
+    bookmarks = lib.mkOption {
+      type = lib.types.attrsOf lib.types.anything;
+      default = [];
+      example = [
+        {
+          Communications = [
+            {
+              Discord = [
+                {
+                  icon = "discord.svg";
+                  href = "https://discord.com";
+                }
+              ];
+            }
+          ];
+        }
+      ];
+      description = ''
+        Homepage bookmarks structure (already parsed JSON -> Nix value).
+        Must match the Homepage "bookmarks:" YAML format (list of group attrsets).
+      '';
     };
 
     proxmox_widget = lib.mkOption {
