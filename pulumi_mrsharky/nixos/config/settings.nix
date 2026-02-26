@@ -52,6 +52,14 @@ let
       enable = false;
     };
 
+    openspec = {
+      enable = false;
+    };
+
+    ekpar2 = {
+      enable = false;
+    };
+
     # Kubernetes Settings
     kube_single_node_enable = false;
     kube_master_ip = "";

@@ -20,6 +20,7 @@ in {
     # "${builtins.fetchTarball "https://github.com/hercules-ci/arion/archive/refs/tags/v0.2.1.0.tar.gz"}/nixos-module.nix"
     "${builtins.fetchTarball "https://github.com/nixos/nixpkgs/archive/master.tar.gz"}/nixos/modules/profiles/qemu-guest.nix"
     ./hardware-configuration.nix
+    ./applications
     ./extra_services
   ];
 
@@ -306,6 +307,12 @@ in {
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
   system.stateVersion = "25.05";
+
+  #############################
+  # custom applications
+  #############################
+  applications.ekpar2 = settings.ekpar2;
+  applications.openspec = settings.openspec;
 
   #############################
   # Extra Services

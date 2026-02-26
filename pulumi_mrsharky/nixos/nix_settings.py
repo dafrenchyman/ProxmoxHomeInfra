@@ -38,6 +38,9 @@ class NixSettings:
 
     ollama_enable: bool = False
 
+    openspec: Optional[dict[str, Any]] = None
+    ekpar2: Optional[dict[str, Any]] = None
+
     # Setup GPU
     gpu_enable: bool = False
     gpu_type: GpuType = GpuType.SOFTWARE
