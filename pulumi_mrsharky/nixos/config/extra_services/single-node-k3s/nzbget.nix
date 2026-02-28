@@ -140,7 +140,7 @@
               gethomepage.dev/enabled: "true"
               gethomepage.dev/group: Download
               gethomepage.dev/name: NZBget
-              gethomepage.dev/description: Web-based program designed for downloading binary files from Usenet.
+              gethomepage.dev/description: A self-hosted application designed to manage and access content from Usenet, utilizing NZB files to organize and retrieve binary data.
               gethomepage.dev/icon: nzbget.png
               gethomepage.dev/href: https://${cfg.subdomain}.${parent.full_hostname}
               gethomepage.dev/widget.type: nzbget

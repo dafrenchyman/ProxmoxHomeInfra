@@ -141,7 +141,7 @@
                 gethomepage.dev/enabled: "true"
                 gethomepage.dev/group: Media
                 gethomepage.dev/name: Immich
-                gethomepage.dev/description: Image Server
+                gethomepage.dev/description: A self-hosted application designed to organize, manage, and stream your personal multimedia content, such as photos, videos, music, and more, while providing features like tagging, categorization, and sharing.
                 gethomepage.dev/icon: immich.png
                 gethomepage.dev/siteMonitor: http://immich-server.default.svc.cluster.local:2283
               hosts:

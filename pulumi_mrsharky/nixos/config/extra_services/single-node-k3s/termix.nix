@@ -123,7 +123,7 @@
               gethomepage.dev/enabled: "true"
               gethomepage.dev/group: Tools
               gethomepage.dev/name: Termix
-              gethomepage.dev/description: SSH terminal, tunneling, and remote file management
+              gethomepage.dev/description: Termix is a self-hosted, open-source server management platform offering SSH access, remote file management, and an intuitive interface for efficiently managing servers.
               gethomepage.dev/icon: termix.png
               gethomepage.dev/siteMonitor: http://termix.default.svc.cluster.local:8080
             hosts:

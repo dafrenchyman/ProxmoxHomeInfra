@@ -106,7 +106,7 @@
               gethomepage.dev/enabled: "true"
               gethomepage.dev/group: Media - Books
               gethomepage.dev/name: Komga
-              gethomepage.dev/description: E-Book Reader
+              gethomepage.dev/description: A self-hosted application designed to help users organize, manage, and display their personal collection of comic books in a digital library format.
               gethomepage.dev/icon: komga.png
               gethomepage.dev/siteMonitor: http://komga.default.svc.cluster.local:25600
             hosts:

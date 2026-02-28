@@ -333,7 +333,7 @@
                   # nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
                   # homepage auto discovery
                   gethomepage.dev/enabled: "true"
-                  gethomepage.dev/group: Media
+                  gethomepage.dev/group: Media - Video
                   gethomepage.dev/name: Plex Media Center
                   gethomepage.dev/description: Stream personal media to any phone, computer, or smart TV.
                   gethomepage.dev/icon: plex.png

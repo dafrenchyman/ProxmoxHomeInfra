@@ -136,7 +136,7 @@
               gethomepage.dev/enabled: "true"
               gethomepage.dev/group: Artificial Intelligence
               gethomepage.dev/name: Open WebUI
-              gethomepage.dev/description: Local LLM Chat UI
+              gethomepage.dev/description: An extensible, feature-rich, and user-friendly self-hosted AI platform designed to operate entirely offline
               gethomepage.dev/icon: open-webui.png
               gethomepage.dev/siteMonitor: http://chat.default.svc.cluster.local:8080
             host: ${cfg.subdomain}.${parent.full_hostname}
@@ -153,6 +153,12 @@
                     pathType: Prefix
             tls: true
             existingSecret: openwebui-tls-secret
+
+          podSecurityContext:
+            fsGroup: ${toString cfg.gid}
+          containerSecurityContext:
+            runAsUser: ${toString cfg.uid}
+            runAsGroup: ${toString cfg.gid}
 
           persistence:
             enabled: true
@@ -281,6 +287,20 @@ in {
       ];
       description = "Optional tolerations YAML fragments for Ollama pod.";
     };
+
+    uid = lib.mkOption {
+      type = lib.types.int;
+      default = 1000;
+      example = 1000;
+      description = "User id that accesses host-mounted folders.";
+    };
+
+    gid = lib.mkOption {
+      type = lib.types.int;
+      default = 1000;
+      example = 1000;
+      description = "Group id that accesses host-mounted folders.";
+    };
   };
 
   config = lib.mkMerge [
@@ -294,6 +314,8 @@ in {
         "L+ /var/lib/rancher/k3s/server/manifests/00-openwebui-pvs.yaml - - - - ${openwebuiPVs}"
         "L+ /var/lib/rancher/k3s/server/manifests/10-openwebui-helmchart.yaml - - - - ${openWebUIHelmChart}"
         "L+ /var/lib/rancher/k3s/server/manifests/20-openwebui-cert.yaml - - - - ${openWebUICert}"
+
+        "d ${cfg.config_path} 0755 ${toString cfg.uid} ${toString cfg.gid} -"
       ];
     })
 

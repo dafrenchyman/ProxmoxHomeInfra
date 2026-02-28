@@ -199,6 +199,7 @@ in {
     ./gitea.nix
     ./homepage.nix
     ./immich.nix
+    ./jellyfin.nix
     ./komga.nix
     ./monitoring.nix
     ./nzbget.nix
