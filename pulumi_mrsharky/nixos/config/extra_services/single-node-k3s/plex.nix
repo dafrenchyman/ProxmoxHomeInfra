@@ -249,13 +249,25 @@
       then ''PLEX_CLAIM: "${cfg.plex_claim}"''
       else ""
     }
-
-            hostNetwork: true
-            dnsPolicy: "ClusterFirstWithHostNet"
+            # Old Setup
+            # hostNetwork: true
+            # dnsPolicy: "ClusterFirstWithHostNet"
 
             service:
               main:
                 enabled: true
+                type: LoadBalancer
+                externalTrafficPolicy: Local
+                ##################################################
+                # NOTE
+                ##################################################
+                # Using the metallb requires you to go to:
+                #   1.) Settings -> Network
+                #   2.) Set `Custom server access URL` to "${cfg.metallb_ip}"
+                # Otherwise clients cannot connect
+                annotations:
+                  metallb.io/address-pool: ${parent.poolName}
+                loadBalancerIP: ${cfg.metallb_ip}
                 ports:
                   http:
                     # 32400/tcp
@@ -479,6 +491,13 @@ in {
       default = 1000;
       example = 1000;
       description = "Group id that accesses the mounted folders";
+    };
+
+    metallb_ip = lib.mkOption {
+      type = lib.types.str;
+      default = "192.168.10.52";
+      example = "192.168.10.52";
+      description = "MetalLB IP used for Plex.";
     };
 
     plex_claim = lib.mkOption {

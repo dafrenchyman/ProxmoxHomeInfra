@@ -6,6 +6,35 @@
 }: let
   cfg = config.extraServices.single_node_k3s;
 
+  nvidiaGpuEnabled =
+    config.extraServices.gpu.enable
+    && config.extraServices.gpu.gpu_type == "nvidia";
+
+  unstable = import (builtins.fetchTarball "https://github.com/NixOS/nixpkgs/archive/nixos-unstable.tar.gz") {
+    system = pkgs.system;
+    config.allowUnfree = true;
+  };
+
+  # nvidia-container-toolkit - 1.17.6
+  pinnedToolkitPkgs =
+    import (builtins.fetchTarball {
+      url = "https://github.com/NixOS/nixpkgs/archive/4684fd6b0c01e4b7d99027a34c93c2e09ecafee2.tar.gz";
+    }) {
+      system = pkgs.system;
+      config.allowUnfree = true;
+    };
+  pinnedNvidiaContainerToolkit = pinnedToolkitPkgs.nvidia-container-toolkit;
+
+  # libnvidia-container - 1.17.6
+  pinnedLibPkgs =
+    import (builtins.fetchTarball {
+      url = "https://github.com/NixOS/nixpkgs/archive/e6f23dc08d3624daab7094b701aa3954923c6bbb.tar.gz";
+    }) {
+      system = pkgs.system;
+      config.allowUnfree = true;
+    };
+  pinnedLibnvidiaContainer = pinnedLibPkgs.libnvidia-container;
+
   # Helper method to indent strings
   indent = n: s: let
     pad = builtins.concatStringsSep "" (builtins.genList (_: " ") n);
@@ -168,6 +197,47 @@
   '';
 
   # #######################
+  # NVIDIA Device Plugin
+  # #######################
+  nvidiaDevicePluginHelmChart = pkgs.writeText "30-nvidia-device-plugin-helmchart.yaml" ''
+    apiVersion: helm.cattle.io/v1
+    kind: HelmChart
+    metadata:
+      name: nvidia-device-plugin
+      namespace: kube-system
+    spec:
+      repo: https://nvidia.github.io/k8s-device-plugin
+      chart: nvidia-device-plugin
+      version: 0.17.3
+      targetNamespace: kube-system
+      valuesContent: |
+        runtimeClassName: nvidia
+        migStrategy: none
+        failOnInitError: false
+        deviceListStrategy: envvar
+        deviceIDStrategy: uuid
+        deviceDiscoveryStrategy: nvml
+
+        gfd:
+          enabled: true
+        nfd:
+          enabled: true
+
+        nodeSelector: {}
+
+        tolerations:
+          - key: CriticalAddonsOnly
+            operator: Exists
+          - key: nvidia.com/gpu
+            operator: Exists
+            effect: NoSchedule
+  '';
+
+  k3sContainerdNvidiaTemplate = pkgs.writeText "k3s-containerd-config-v3.toml.tmpl" ''
+    {{ template "base" . }}
+  '';
+
+  # #######################
   # Cloud Native Postgres
   # #######################
 
@@ -203,6 +273,7 @@ in {
     ./komga.nix
     ./monitoring.nix
     ./nzbget.nix
+    ./ollama.nix
     ./open-webui.nix
     ./plex.nix
     ./termix.nix
@@ -275,6 +346,11 @@ in {
     zramSwap.memoryPercent = 25;
 
     boot.kernel.sysctl = {
+      # Increase file watching
+      "fs.inotify.max_user_watches" = 1048576; # 1,048,576
+      "fs.inotify.max_user_instances" = 8192;
+      "fs.inotify.max_queued_events" = 32768;
+      # K3s related?
       "vm.dirty_background_ratio" = 3;
       "vm.dirty_ratio" = 5;
       "vm.min_free_kbytes" = 65536;
@@ -301,12 +377,34 @@ in {
       ];
     };
 
-    environment.systemPackages = with pkgs; [
-      kubectl
-      helm
-      vmtouch
-      # (k3s binaries are managed by the service)
-    ];
+    hardware.nvidia-container-toolkit = lib.mkIf nvidiaGpuEnabled {
+      enable = true;
+      package = pinnedNvidiaContainerToolkit;
+      mount-nvidia-executables = true;
+      mount-nvidia-docker-1-directories = true;
+    };
+
+    environment.systemPackages = with pkgs;
+      [
+        kubectl
+        helm
+        vmtouch
+        # (k3s binaries are managed by the service)
+      ]
+      ++ lib.optionals nvidiaGpuEnabled [
+        # For Nvidia GPU
+        pinnedNvidiaContainerToolkit
+        pinnedNvidiaContainerToolkit.tools
+        pinnedLibnvidiaContainer
+      ];
+
+    # Optional settings if we have an nvidia GPU
+    systemd.services.k3s.path = lib.optionals nvidiaGpuEnabled (with pkgs; [
+      pinnedNvidiaContainerToolkit
+      pinnedNvidiaContainerToolkit.tools
+      pinnedLibnvidiaContainer
+      runc
+    ]);
 
     networking.hostName = cfg.hostname;
 
@@ -376,24 +474,34 @@ in {
       ];
     };
 
-    systemd.tmpfiles.rules = [
-      # Ingress
-      "L+ /var/lib/rancher/k3s/server/manifests/ingress-nginx.yaml - - - - ${ingressHelmChart}"
+    # Raise open file limit for k3s (affects containers)
+    systemd.services.k3s.serviceConfig = {
+      LimitNOFILE = 1048576;
+    };
 
-      # cert-manager
-      "L+ /var/lib/rancher/k3s/server/manifests/cert-manager-namespace.yaml - - - - ${certManagerNamespace}"
-      "L+ /var/lib/rancher/k3s/server/manifests/cert-manager.yaml - - - - ${certManagerHelmChart}"
-      "L+ /var/lib/rancher/k3s/server/manifests/cert-manager-issuers.yaml - - - - ${certManagerIssuers}"
+    systemd.tmpfiles.rules =
+      [
+        # Ingress
+        "L+ /var/lib/rancher/k3s/server/manifests/ingress-nginx.yaml - - - - ${ingressHelmChart}"
 
-      # MetalLB
-      "L+ /var/lib/rancher/k3s/server/manifests/00-metallb-namespace.yaml - - - - ${metallbNamespace}"
-      "L+ /var/lib/rancher/k3s/server/manifests/10-metallb-helmchart.yaml - - - - ${metallbHelmChart}"
-      "L+ /var/lib/rancher/k3s/server/manifests/20-metallb-address-pool.yaml - - - - ${metallbPool}"
+        # cert-manager
+        "L+ /var/lib/rancher/k3s/server/manifests/cert-manager-namespace.yaml - - - - ${certManagerNamespace}"
+        "L+ /var/lib/rancher/k3s/server/manifests/cert-manager.yaml - - - - ${certManagerHelmChart}"
+        "L+ /var/lib/rancher/k3s/server/manifests/cert-manager-issuers.yaml - - - - ${certManagerIssuers}"
 
-      # Cloudnative Postgres
-      "L+ /var/lib/rancher/k3s/server/manifests/00-postgres-cloud-native-namespace.yaml - - - - ${postgresCloudNativeNamespace}"
-      "L+ /var/lib/rancher/k3s/server/manifests/10-postgres-cloud-native-helmchart.yaml - - - - ${postgresCloudNativeHelmChart}"
-    ];
+        # MetalLB
+        "L+ /var/lib/rancher/k3s/server/manifests/00-metallb-namespace.yaml - - - - ${metallbNamespace}"
+        "L+ /var/lib/rancher/k3s/server/manifests/10-metallb-helmchart.yaml - - - - ${metallbHelmChart}"
+        "L+ /var/lib/rancher/k3s/server/manifests/20-metallb-address-pool.yaml - - - - ${metallbPool}"
+
+        # Cloudnative Postgres
+        "L+ /var/lib/rancher/k3s/server/manifests/00-postgres-cloud-native-namespace.yaml - - - - ${postgresCloudNativeNamespace}"
+        "L+ /var/lib/rancher/k3s/server/manifests/10-postgres-cloud-native-helmchart.yaml - - - - ${postgresCloudNativeHelmChart}"
+      ]
+      ++ lib.optionals nvidiaGpuEnabled [
+        "L+ /var/lib/rancher/k3s/server/manifests/30-nvidia-device-plugin-helmchart.yaml - - - - ${nvidiaDevicePluginHelmChart}"
+        # "L+ /var/lib/rancher/k3s/agent/etc/containerd/config-v3.toml.tmpl - - - - ${k3sContainerdNvidiaTemplate}"
+      ];
 
     # Tip for future multi-node:
     # - Join agents with:

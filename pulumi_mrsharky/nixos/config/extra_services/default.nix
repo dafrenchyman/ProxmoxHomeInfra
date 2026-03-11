@@ -8,6 +8,7 @@
     ./single-node-k3s
     ./cloud-init.nix
     ./desktop-apps.nix
+    ./development.nix
     ./samba_server.nix
     ./glances-service.nix
     ./gow-wolf.nix

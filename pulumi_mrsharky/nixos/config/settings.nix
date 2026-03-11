@@ -32,6 +32,11 @@ let
     # Desktop app
     desktop_apps_enable = false;
 
+    # Development (Python)
+    development = {
+      enable = false;
+    };
+
     # Samba Fileserver settings
     samba_server = {
       enable = false;
@@ -49,6 +54,10 @@ let
 
     # Samba mount settings
     mount_samba = {
+      enable = false;
+    };
+
+    codex = {
       enable = false;
     };
 

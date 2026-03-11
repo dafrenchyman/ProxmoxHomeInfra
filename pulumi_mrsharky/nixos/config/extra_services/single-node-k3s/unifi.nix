@@ -75,7 +75,8 @@
       valuesContent: |
         image:
           repository: jacobalberty/unifi
-          tag: v8.4.62
+          # tag: v8.4.62
+          tag: v10.0.162
           pullPolicy: IfNotPresent
 
         env:
@@ -93,6 +94,8 @@
             mountPath: /unifi
             ReadOnly: false
 
+        # Unifi requires hostNetwork access
+        # TODO: I tried getting it to work over metallb and failed. Maybe worth a shot later
         hostNetwork: true
         dnsPolicy: ClusterFirstWithHostNet
 
@@ -162,6 +165,12 @@
               kubernetes.io/ingress.class: nginx
               nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
               nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+              gethomepage.dev/enabled: "true"
+              gethomepage.dev/group: Networking
+              gethomepage.dev/name: Unifi Controller
+              gethomepage.dev/description: Unifi Controller
+              gethomepage.dev/icon: unifi-controller.png
+              gethomepage.dev/siteMonitor: http://unifi.default.svc.cluster.local:8443
             tls:
               - secretName: unifi-tls-secret
                 hosts:
@@ -211,6 +220,20 @@ in {
       default = 1000;
       example = 1000;
       description = "Group id that accesses the mounted folders";
+    };
+
+    metallb_pool = lib.mkOption {
+      type = lib.types.str;
+      default = parent.poolName;
+      example = "pool1";
+      description = "MetalLB address pool to use for the UniFi LoadBalancer service.";
+    };
+
+    loadBalancerIP = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "192.168.10.52";
+      description = "Optional fixed MetalLB IP for the UniFi service. Leave null to auto-assign.";
     };
   };
 

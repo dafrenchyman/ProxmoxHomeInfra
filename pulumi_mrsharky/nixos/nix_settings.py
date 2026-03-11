@@ -36,6 +36,9 @@ class NixSettings:
     # Useful Desktop Apps
     desktop_apps_enable: bool = False
 
+    # Development tools
+    development: Optional[dict[str, Any]] = None
+
     ollama_enable: bool = False
 
     openspec: Optional[dict[str, Any]] = None

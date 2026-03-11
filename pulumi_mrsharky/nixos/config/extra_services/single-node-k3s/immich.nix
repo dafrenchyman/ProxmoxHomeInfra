@@ -43,7 +43,7 @@
   '';
 
   # -------------------------
-  # Optional cert-manager cert
+  # cert-manager cert
   # -------------------------
   immichCert = pkgs.writeText "20-immich-cert.yaml" ''
     apiVersion: cert-manager.io/v1

@@ -161,8 +161,10 @@
               enabled: true
               className: nginx
               annotations:
-                nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-                # homepage auto discovery (optional)
+                # No force redirect for apps
+                nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+                nginx.ingress.kubernetes.io/ssl-redirect: "false"
+                # homepage auto discovery
                 gethomepage.dev/enabled: "true"
                 gethomepage.dev/group: Media - Video
                 gethomepage.dev/name: Jellyfin
@@ -325,7 +327,6 @@ in {
       systemd.tmpfiles.rules =
         [
           "L+ /var/lib/rancher/k3s/server/manifests/00-jellyfin-pvs.yaml - - - - ${jellyfinPVs}"
-          l
           "L+ /var/lib/rancher/k3s/server/manifests/10-jellyfin-helmchart.yaml - - - - ${jellyfinHelmChart}"
           "L+ /var/lib/rancher/k3s/server/manifests/20-jellyfin-cert.yaml - - - - ${jellyfinCert}"
 

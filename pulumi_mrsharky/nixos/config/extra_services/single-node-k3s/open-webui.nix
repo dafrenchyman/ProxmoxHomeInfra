@@ -154,11 +154,12 @@
             tls: true
             existingSecret: openwebui-tls-secret
 
-          podSecurityContext:
-            fsGroup: ${toString cfg.gid}
-          containerSecurityContext:
-            runAsUser: ${toString cfg.uid}
-            runAsGroup: ${toString cfg.gid}
+          # This doesn't seem to work :-(
+          # podSecurityContext:
+          #   fsGroup: ${toString cfg.gid}
+          # containerSecurityContext:
+          #   runAsUser: ${toString cfg.uid}
+          #   runAsGroup: ${toString cfg.gid}
 
           persistence:
             enabled: true
@@ -184,7 +185,7 @@ in {
     # Open WebUI chart config
     openwebui_chart_version = lib.mkOption {
       type = lib.types.str;
-      default = "12.3.0";
+      default = "12.8.1";
       description = "Open WebUI chart version to install (pin for reproducibility).";
     };
 
