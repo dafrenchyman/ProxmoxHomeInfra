@@ -51,6 +51,21 @@
       license = licenses.gpl3Only;
     };
   };
+
+  ekpar2DesktopItem = pkgs.makeDesktopItem {
+    name = "ekpar2";
+    desktopName = "EKPar2";
+    genericName = "PAR2 Utility";
+    comment = "Create and verify PAR2 recovery files";
+    exec = "ekpar2 %F";
+    terminal = false;
+    categories = [
+      "Utility"
+      "Qt"
+      "KDE"
+    ];
+    startupNotify = true;
+  };
 in {
   options.applications.ekpar2 = {
     enable = lib.mkEnableOption "EKPar2 (build from source)";
@@ -72,6 +87,7 @@ in {
     environment.systemPackages = [
       pkgs.par2cmdline
       cfg.package
+      ekpar2DesktopItem
     ];
   };
 }

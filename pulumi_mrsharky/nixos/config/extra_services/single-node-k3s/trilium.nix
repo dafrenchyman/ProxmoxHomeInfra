@@ -224,7 +224,7 @@ in {
     (lib.mkIf (!cfg.enable) {
       # Clean up symlinks when disabled
       systemd.tmpfiles.rules = [
-        "r /var/lib/rancher/k3s/server/manifests/00-trilium-pvs.yaml - - - - ${triliumPVs}"
+        "r /var/lib/rancher/k3s/server/manifests/00-trilium-pvs.yaml"
         "r /var/lib/rancher/k3s/server/manifests/10-trilium-helmchart.yaml"
         "r /var/lib/rancher/k3s/server/manifests/20-trilium-cert.yaml"
       ];

@@ -26,8 +26,9 @@
     then " []"
     else "\n${indent indentLevel (lib.concatMapStringsSep "\n" (item: "- ${item}") items)}";
 
-  renderExtraEnv = indent: attrs: let
+  renderExtraEnv = indentLevel: attrs: let
     names = builtins.attrNames attrs;
+    pad = builtins.concatStringsSep "" (builtins.genList (_: " ") indentLevel);
   in
     if names == []
     then " []"
@@ -36,18 +37,19 @@
       + lib.concatMapStringsSep "\n" (
         name:
           lib.concatStringsSep "\n" [
-            "${indent}- name: ${name}"
-            "${indent}  value: ${quoted (toString attrs.${name})}"
+            "${pad}- name: ${name}"
+            "${pad}  value: ${quoted (toString attrs.${name})}"
           ]
       )
       names;
 
-  renderStringMap = indent: attrs: let
+  renderStringMap = indentLevel: attrs: let
     names = builtins.attrNames attrs;
+    pad = builtins.concatStringsSep "" (builtins.genList (_: " ") indentLevel);
   in
     if names == []
     then " {}"
-    else "\n" + lib.concatMapStringsSep "\n" (name: "${indent}${name}: ${quoted (toString attrs.${name})}") names;
+    else "\n" + lib.concatMapStringsSep "\n" (name: "${pad}${name}: ${quoted (toString attrs.${name})}") names;
 
   # -------------------------
   # PV + PVC for Ollama data
@@ -170,9 +172,9 @@
           storageClass: "base"
           volumeName: "ollama-pv"
 
-        extraEnv:${renderExtraEnv "10" cfg.extraEnv}
+        extraEnv:${renderExtraEnv 10 cfg.extraEnv}
 
-        nodeSelector:${renderStringMap "10" cfg.nodeSelector}
+        nodeSelector:${renderStringMap 10 cfg.nodeSelector}
   '';
 in {
   options.extraServices.single_node_k3s.ollama = {
@@ -231,22 +233,23 @@ in {
         default = [
           "deepcoder:14b"
           "deepseek-r1:32b"
-          "devstral:24b"
-          "gemma3:27b"
-          "gpt-oss:20b"
+          # "devstral:24b"
+          # "gemma3:27b"
+          # "gpt-oss:20b"
           "llama3.1:8b"
-          "llama3.2:3b"
-          "magistral:24b"
-          "ministral-3:14b"
-          "mistral-small3.2:24b"
-          "olmo-3.1:32b"
-          "phi4-reasoning:14b"
-          "qwen2.5-coder:7b"
-          "qwen2.5vl:32b"
-          "qwen3:32b"
+          #"llama3.2:3b"
+          # "magistral:24b
+          # "ministral-3:14b"
+          # "mistral-small3.2:24b"
+          # "olmo-3.1:32b"
+          # "phi4-reasoning:14b"
+          # "qwen2.5-coder:7b"
+          # "qwen2.5vl:32b"
+          # "qwen3:32b"
           "qwen3-coder:30b"
-          "qwen3.5:9b"
-          "qwen3.5:27b"
+          "hf.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:UD-Q4_K_XL"
+          # "qwen3.5:9b"
+          # "qwen3.5:27b"
         ];
         example = ["llama3.2" "nomic-embed-text"];
         description = "Models to pull at container startup.";
@@ -266,7 +269,9 @@ in {
         lib.types.int
         lib.types.bool
       ]);
-      default = {};
+      default = {
+        OLLAMA_KEEP_ALIVE = "3m";
+      };
       example = {
         OLLAMA_KEEP_ALIVE = "24h";
         OLLAMA_NUM_PARALLEL = 2;

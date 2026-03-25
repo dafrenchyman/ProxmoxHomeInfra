@@ -37,7 +37,7 @@
     spec:
       repo: https://bjw-s-labs.github.io/helm-charts/
       chart: app-template
-      version: ${cfg.app_template_version}
+      version: 4.3.0
       targetNamespace: default
       valuesContent: |
         controllers:
@@ -47,7 +47,7 @@
             containers:
               app:
                 image:
-                  repository: ${cfg.image_repository}
+                  repository: ghcr.io/advplyr/audiobookshelf
                   tag: ${cfg.image_tag}
                   pullPolicy: IfNotPresent
                 env:
@@ -153,21 +153,6 @@ in {
       default = "audiobookshelf";
       example = "audiobookshelf";
       description = "Subdomain prefix used for the Audiobookshelf ingress (e.g. audiobookshelf.example.com).";
-    };
-
-    # Chart + image controls (handy when you want to bump versions)
-    app_template_version = lib.mkOption {
-      type = lib.types.str;
-      default = "4.3.0";
-      example = "4.3.0";
-      description = "bjw-s/app-template chart version.";
-    };
-
-    image_repository = lib.mkOption {
-      type = lib.types.str;
-      default = "ghcr.io/advplyr/audiobookshelf";
-      example = "ghcr.io/advplyr/audiobookshelf";
-      description = "Container image repository.";
     };
 
     image_tag = lib.mkOption {

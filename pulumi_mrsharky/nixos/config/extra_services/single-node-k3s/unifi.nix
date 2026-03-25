@@ -237,40 +237,49 @@ in {
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    # Firewall rules
-    networking.firewall.allowedTCPPorts = [
-      8443 # Unifi - Web interface + API
-      3478 # Unifi - STUN port
-      10001 # Unifi - Device discovery
-      8080 # Unifi - Controller
-      1900 # Unifi - ???
-      8843 # Unifi - Captive Portal (https)
-      8880 # Unifi - Captive Portal (http)
-      6789 # Unifi - Speedtest
-      5514 # Unifi - remote syslog
-    ];
-    networking.firewall.allowedUDPPorts = [
-      8443 # Unifi - Web interface + API
-      3478 # Unifi - STUN port
-      10001 # Unifi - Device discovery
-      8080 # Unifi - Controller
-      1900 # Unifi - ???
-      8843 # Unifi - Captive Portal (https)
-      8880 # Unifi - Captive Portal (http)
-      6789 # Unifi - Speedtest
-      5514 # Unifi - remote syslog
-    ];
-
-    # Chart files to automatically pick up
-    systemd.tmpfiles.rules =
-      [
-        "L+ /var/lib/rancher/k3s/server/manifests/00-unifi-pvs.yaml - - - - ${unifiPVs}"
-        "L+ /var/lib/rancher/k3s/server/manifests/10-unifi-helmchart.yaml - - - - ${unifiHelmChart}"
-        "L+ /var/lib/rancher/k3s/server/manifests/20-unifi-cert.yaml - - - - ${unifiCert}"
-      ]
-      ++ [
-        "d ${cfg.config_path} 0755 ${toString cfg.uid} ${toString cfg.gid} -"
+  config = lib.mkMerge [
+    (lib.mkIf cfg.enable {
+      # Firewall rules
+      networking.firewall.allowedTCPPorts = [
+        8443 # Unifi - Web interface + API
+        3478 # Unifi - STUN port
+        10001 # Unifi - Device discovery
+        8080 # Unifi - Controller
+        1900 # Unifi - ???
+        8843 # Unifi - Captive Portal (https)
+        8880 # Unifi - Captive Portal (http)
+        6789 # Unifi - Speedtest
+        5514 # Unifi - remote syslog
       ];
-  };
+      networking.firewall.allowedUDPPorts = [
+        8443 # Unifi - Web interface + API
+        3478 # Unifi - STUN port
+        10001 # Unifi - Device discovery
+        8080 # Unifi - Controller
+        1900 # Unifi - ???
+        8843 # Unifi - Captive Portal (https)
+        8880 # Unifi - Captive Portal (http)
+        6789 # Unifi - Speedtest
+        5514 # Unifi - remote syslog
+      ];
+
+      # Chart files to automatically pick up
+      systemd.tmpfiles.rules =
+        [
+          "L+ /var/lib/rancher/k3s/server/manifests/00-unifi-pvs.yaml - - - - ${unifiPVs}"
+          "L+ /var/lib/rancher/k3s/server/manifests/10-unifi-helmchart.yaml - - - - ${unifiHelmChart}"
+          "L+ /var/lib/rancher/k3s/server/manifests/20-unifi-cert.yaml - - - - ${unifiCert}"
+        ]
+        ++ [
+          "d ${cfg.config_path} 0755 ${toString cfg.uid} ${toString cfg.gid} -"
+        ];
+    })
+    (lib.mkIf (!cfg.enable) {
+      systemd.tmpfiles.rules = [
+        "r /var/lib/rancher/k3s/server/manifests/00-unifi-pvs.yaml"
+        "r /var/lib/rancher/k3s/server/manifests/10-unifi-helmchart.yaml"
+        "r /var/lib/rancher/k3s/server/manifests/20-unifi-cert.yaml"
+      ];
+    })
+  ];
 }

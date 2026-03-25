@@ -152,3 +152,31 @@ sudo cat /var/lib/rancher/k3s/server/manifests/10-wikijs-helmchart.yaml | kubect
 kubectl -n kube-system delete helmchart transmission-openvpn
 sudo cat /var/lib/rancher/k3s/server/manifests/10-plex-helmchart.yaml | kubectl apply -f -
 ```
+
+Clean up stale k3s junk after crashes, failed rollouts, or abandoned experiments:
+
+```bash
+# Delete failed and completed pods across all namespaces
+kubectl delete pod -A --field-selector=status.phase==Failed
+kubectl delete pod -A --field-selector=status.phase==Succeeded
+
+# Delete old completed helm-install jobs created by k3s helm-controller
+kubectl get job -A \
+  | awk 'NR>1 && $3=="1/1" {print "kubectl delete job -n " $1 " " $2}' \
+  | bash
+
+# Delete old zero-sized ReplicaSets left behind by deployment rollouts
+kubectl get rs -A \
+  | awk 'NR>1 && $3==0 && $4==0 && $5==0 {print "kubectl delete rs -n " $1 " " $2}' \
+  | bash
+
+# Delete stale services/ingresses/certs for abandoned experiments
+# Adjust the names to whatever you no longer want running.
+kubectl delete service -n default forge swarmui || true
+kubectl delete ingress -n default forge swarmui || true
+kubectl delete certificate -n default forge-tls swarmui-tls || true
+
+# Sanity check after cleanup
+kubectl get all -A
+kubectl get ingress,certificate -A
+```

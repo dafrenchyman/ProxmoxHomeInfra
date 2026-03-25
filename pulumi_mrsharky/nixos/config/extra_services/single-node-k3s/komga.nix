@@ -37,7 +37,7 @@
     spec:
       repo: https://bjw-s-labs.github.io/helm-charts/
       chart: app-template
-      version: ${cfg.app_template_version}
+      version: 4.3.0
       targetNamespace: default
       valuesContent: |
         controllers:
@@ -53,14 +53,12 @@
                 env:
                   - name: TZ
                     value: "${config.time.timeZone}"
-
         service:
           main:
             controller: main
             ports:
               http:
                 port: 25600
-
         persistence:
           config:
             enabled: true
@@ -72,7 +70,6 @@
                 app:
                   - path: /config
                     readOnly: false
-
           books:
             enabled: true
             type: hostPath
@@ -139,14 +136,6 @@ in {
       default = "komga";
       example = "komga";
       description = "Subdomain prefix used for the Ubooquity ingress (e.g. komga.example.com).";
-    };
-
-    # Chart + image controls (handy when you want to bump versions)
-    app_template_version = lib.mkOption {
-      type = lib.types.str;
-      default = "4.3.0";
-      example = "4.3.0";
-      description = "bjw-s/app-template chart version.";
     };
 
     config_path = lib.mkOption {
