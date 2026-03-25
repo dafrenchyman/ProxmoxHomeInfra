@@ -73,13 +73,9 @@
       // lib.optionalAttrs cfg.gpu.enable {
         "nvidia.com/gpu" = cfg.gpu.count;
       };
-    limits =
-      {
-        memory = "12Gi";
-      }
-      // lib.optionalAttrs cfg.gpu.enable {
-        "nvidia.com/gpu" = cfg.gpu.count;
-      };
+    limits = lib.optionalAttrs cfg.gpu.enable {
+      "nvidia.com/gpu" = cfg.gpu.count;
+    };
   };
 
   nodeSelectorYaml = lib.generators.toYAML {} cfg.nodeSelector;
@@ -125,7 +121,7 @@
     spec:
       repo: https://charts.mrsharky.com
       chart: fooocus_extend
-      version: 0.1.0
+      version: 0.1.1
       targetNamespace: default
       valuesContent: |
         image:
