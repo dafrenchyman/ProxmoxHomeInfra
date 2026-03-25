@@ -117,94 +117,84 @@
       renewBefore: 360h
   '';
 
-  forgeHelmChart = pkgs.writeText "10-forge-helmchart.yaml" (
-    ''
-      apiVersion: helm.cattle.io/v1
-      kind: HelmChart
-      metadata:
-        name: forge
-        namespace: kube-system
-      spec:
-        repo: https://bjw-s-labs.github.io/helm-charts/
-        chart: app-template
-        version: 4.3.0
-        targetNamespace: default
-        valuesContent: |
-          controllers:
-            main:
-              type: deployment
-              revisionHistoryLimit: 1
-              strategy: Recreate
-              pod:
-    ''
-    + lib.optionalString cfg.gpu.enable (indent 14 ''runtimeClassName: "${cfg.runtimeClassName}"'')
-    + ''
-      nodeSelector:
-    ''
-    + indent 16 nodeSelectorYaml
-    + ''
-      containers:
-        app:
-          image:
-            repository: ghcr.io/ai-dock/stable-diffusion-webui-forge
-            tag: ${cfg.image_tag}
-            pullPolicy: IfNotPresent
-          env:
-    ''
-    + indent 18 envYaml
-    + lib.optionalString cfg.gpu.enable ''
-                        resources:
+  forgeHelmChart = pkgs.writeText "10-forge-helmchart.yaml" ''
+        apiVersion: helm.cattle.io/v1
+        kind: HelmChart
+        metadata:
+          name: forge
+          namespace: kube-system
+        spec:
+          repo: https://bjw-s-labs.github.io/helm-charts/
+          chart: app-template
+          version: 4.3.0
+          targetNamespace: default
+          valuesContent: |
+            controllers:
+              main:
+                type: deployment
+                revisionHistoryLimit: 1
+                strategy: Recreate
+                pod:
+        ${lib.optionalString cfg.gpu.enable (indent 10 ''runtimeClassName: "${cfg.runtimeClassName}"'')}
+                  nodeSelector:
+        ${indent 12 nodeSelectorYaml}
+                containers:
+                  app:
+                    image:
+                      repository: ghcr.io/ai-dock/stable-diffusion-webui-forge
+                      tag: ${cfg.image_tag}
+                      pullPolicy: IfNotPresent
+                    env:
+        ${indent 18 envYaml}
+    ${lib.optionalString cfg.gpu.enable ''
+                  resources:
       ${indent 18 gpuResourcesYaml}
-    ''
-    + ''
-      service:
-        main:
-          controller: main
-          ports:
-            http:
-              port: ${toString containerPort}
-      persistence:
-    ''
-    + indent 10 persistenceYaml
-    + ''
-      podSecurityContext:
-        fsGroup: ${toString cfg.gid}
-      securityContext:
-        runAsUser: ${toString cfg.uid}
-        runAsGroup: ${toString cfg.gid}
-      ingress:
-        main:
-          enabled: true
-          className: nginx
-          annotations:
-            nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-            gethomepage.dev/enabled: "true"
-            gethomepage.dev/group: AI
-            gethomepage.dev/name: Forge
-            gethomepage.dev/description: Stable Diffusion WebUI Forge.
-            gethomepage.dev/siteMonitor: http://forge.default.svc.cluster.local:${toString publicPort}
-          hosts:
-            - host: ${cfg.subdomain}.${parent.full_hostname}
-              paths:
-                - path: /
-                  pathType: Prefix
-                  service:
-                    identifier: main
-                    port: http
-            - host: ${cfg.subdomain}.${parent.node_master_ip}.nip.io
-              paths:
-                - path: /
-                  pathType: Prefix
-                  service:
-                    identifier: main
-                    port: http
-          tls:
-            - secretName: forge-tls-secret
-              hosts:
-                - ${cfg.subdomain}.${parent.full_hostname}
-                - ${cfg.subdomain}.${parent.node_master_ip}.nip.io
-    ''
-  );
+    ''}
+            service:
+              main:
+                controller: main
+                ports:
+                  http:
+                    port: ${toString containerPort}
+            persistence:
+        ${indent 6 persistenceYaml}
+            podSecurityContext:
+              fsGroup: ${toString cfg.gid}
+            securityContext:
+              runAsUser: ${toString cfg.uid}
+              runAsGroup: ${toString cfg.gid}
+            ingress:
+              main:
+                enabled: true
+                className: nginx
+                annotations:
+                  nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+                  gethomepage.dev/enabled: "true"
+                  gethomepage.dev/group: AI
+                  gethomepage.dev/name: Forge
+                  gethomepage.dev/description: Stable Diffusion WebUI Forge.
+                  gethomepage.dev/siteMonitor: http://forge.default.svc.cluster.local:${toString publicPort}
+                hosts:
+                  - host: ${cfg.subdomain}.${parent.full_hostname}
+                    paths:
+                      - path: /
+                        pathType: Prefix
+                        service:
+                          identifier: main
+                          port: http
+                  - host: ${cfg.subdomain}.${parent.node_master_ip}.nip.io
+                    paths:
+                      - path: /
+                        pathType: Prefix
+                        service:
+                          identifier: main
+                          port: http
+                tls:
+                  - secretName: forge-tls-secret
+                    hosts:
+                      - ${cfg.subdomain}.${parent.full_hostname}
+                      - ${cfg.subdomain}.${parent.node_master_ip}.nip.io
+  '';
 in {
   options.extraServices.single_node_k3s.forge = {
     enable = lib.mkEnableOption "Stable Diffusion WebUI Forge service";

@@ -7,6 +7,10 @@
   cfg = config.extraServices.single_node_k3s.invokeai;
   parent = config.extraServices.single_node_k3s;
   containerPort = 9090;
+  manifestAddonNames = [
+    "10-invokeai-helmchart"
+    "20-invokeai-cert"
+  ];
 
   indent = n: s: let
     pad = builtins.concatStringsSep "" (builtins.genList (_: " ") n);
@@ -58,15 +62,88 @@
       ];
     };
   };
-
   gpuResourcesYaml = lib.generators.toYAML {} {
-    limits = {
-      "nvidia.com/gpu" = toString cfg.gpu.count;
-    };
-    requests = {
-      "nvidia.com/gpu" = toString cfg.gpu.count;
-    };
+    limits."nvidia.com/gpu" = toString cfg.gpu.count;
+    requests."nvidia.com/gpu" = toString cfg.gpu.count;
   };
+
+  valuesContent = lib.concatStringsSep "\n" (
+    [
+      "controllers:"
+      "  main:"
+      "    type: deployment"
+      "    revisionHistoryLimit: 1"
+      "    strategy: Recreate"
+      "    pod:"
+    ]
+    ++ lib.optionals cfg.gpu.enable [
+      "      runtimeClassName: \"${cfg.runtimeClassName}\""
+    ]
+    ++ [
+      "      nodeSelector:"
+    ]
+    ++ lib.splitString "\n" (indent 8 nodeSelectorYaml)
+    ++ [
+      "    containers:"
+      "      app:"
+      "        image:"
+      "          repository: ghcr.io/invoke-ai/invokeai"
+      "          tag: ${cfg.image_tag}"
+      "          pullPolicy: IfNotPresent"
+      "        env:"
+    ]
+    ++ lib.splitString "\n" (indent 10 envYaml)
+    ++ lib.optionals cfg.gpu.enable (
+      [
+        "        resources:"
+      ]
+      ++ lib.splitString "\n" (indent 10 gpuResourcesYaml)
+    )
+    ++ [
+      "service:"
+      "  main:"
+      "    controller: main"
+      "    ports:"
+      "      http:"
+      "        port: ${toString containerPort}"
+      "persistence:"
+    ]
+    ++ lib.splitString "\n" (indent 2 persistenceYaml)
+    ++ [
+      "ingress:"
+      "  main:"
+      "    enabled: true"
+      "    className: nginx"
+      "    annotations:"
+      "      nginx.ingress.kubernetes.io/force-ssl-redirect: \"true\""
+      "      gethomepage.dev/enabled: \"true\""
+      "      gethomepage.dev/group: AI"
+      "      gethomepage.dev/name: InvokeAI"
+      "      gethomepage.dev/description: InvokeAI with built-in model manager."
+      "      gethomepage.dev/icon: invoke-ai"
+      "      gethomepage.dev/siteMonitor: http://invokeai.default.svc.cluster.local:${toString containerPort}"
+      "    hosts:"
+      "      - host: ${cfg.subdomain}.${parent.full_hostname}"
+      "        paths:"
+      "          - path: /"
+      "            pathType: Prefix"
+      "            service:"
+      "              identifier: main"
+      "              port: http"
+      "      - host: ${cfg.subdomain}.${parent.node_master_ip}.nip.io"
+      "        paths:"
+      "          - path: /"
+      "            pathType: Prefix"
+      "            service:"
+      "              identifier: main"
+      "              port: http"
+      "    tls:"
+      "      - secretName: invokeai-tls-secret"
+      "        hosts:"
+      "          - ${cfg.subdomain}.${parent.full_hostname}"
+      "          - ${cfg.subdomain}.${parent.node_master_ip}.nip.io"
+    ]
+  );
 
   invokeaiCert = pkgs.writeText "20-invokeai-cert.yaml" ''
     apiVersion: cert-manager.io/v1
@@ -87,90 +164,20 @@
       renewBefore: 360h
   '';
 
-  invokeaiHelmChart = pkgs.writeText "10-invokeai-helmchart.yaml" (
-    ''
-      apiVersion: helm.cattle.io/v1
-      kind: HelmChart
-      metadata:
-        name: invokeai
-        namespace: kube-system
-      spec:
-        repo: https://bjw-s-labs.github.io/helm-charts/
-        chart: app-template
-        version: 4.3.0
-        targetNamespace: default
-        valuesContent: |
-          controllers:
-            main:
-              type: deployment
-              revisionHistoryLimit: 1
-              strategy: Recreate
-              pod:
-    ''
-    + lib.optionalString cfg.gpu.enable (indent 14 ''runtimeClassName: "${cfg.runtimeClassName}"'')
-    + ''
-      nodeSelector:
-    ''
-    + indent 16 nodeSelectorYaml
-    + ''
-      containers:
-        app:
-          image:
-            repository: ghcr.io/invoke-ai/invokeai
-            tag: ${cfg.image_tag}
-            pullPolicy: IfNotPresent
-          env:
-    ''
-    + indent 18 envYaml
-    + lib.optionalString cfg.gpu.enable ''
-                    resources:
-      ${indent 18 gpuResourcesYaml}
-    ''
-    + ''
-      service:
-        main:
-          controller: main
-          ports:
-            http:
-              port: ${toString containerPort}
-      persistence:
-    ''
-    + indent 10 persistenceYaml
-    + ''
-      ingress:
-        main:
-          enabled: true
-          className: nginx
-          annotations:
-            nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-            gethomepage.dev/enabled: "true"
-            gethomepage.dev/group: AI
-            gethomepage.dev/name: InvokeAI
-            gethomepage.dev/description: InvokeAI with built-in model manager.
-            gethomepage.dev/icon: invoke-ai
-            gethomepage.dev/siteMonitor: http://invokeai.default.svc.cluster.local:${toString containerPort}
-          hosts:
-            - host: ${cfg.subdomain}.${parent.full_hostname}
-              paths:
-                - path: /
-                  pathType: Prefix
-                  service:
-                    identifier: main
-                    port: http
-            - host: ${cfg.subdomain}.${parent.node_master_ip}.nip.io
-              paths:
-                - path: /
-                  pathType: Prefix
-                  service:
-                    identifier: main
-                    port: http
-          tls:
-            - secretName: invokeai-tls-secret
-              hosts:
-                - ${cfg.subdomain}.${parent.full_hostname}
-                - ${cfg.subdomain}.${parent.node_master_ip}.nip.io
-    ''
-  );
+  invokeaiHelmChart = pkgs.writeText "10-invokeai-helmchart.yaml" ''
+    apiVersion: helm.cattle.io/v1
+    kind: HelmChart
+    metadata:
+      name: invokeai
+      namespace: kube-system
+    spec:
+      repo: https://bjw-s-labs.github.io/helm-charts/
+      chart: app-template
+      version: 4.3.0
+      targetNamespace: default
+      valuesContent: |
+    ${indent 8 valuesContent}
+  '';
 in {
   options.extraServices.single_node_k3s.invokeai = {
     enable = lib.mkEnableOption "InvokeAI service";
@@ -252,6 +259,9 @@ in {
       ];
     })
     (lib.mkIf (!cfg.enable) {
+      services.k3s.extraFlags = lib.mkAfter (
+        lib.optionals parent.enable (map (addonName: "--disable=${addonName}") manifestAddonNames)
+      );
       systemd.tmpfiles.rules = [
         "r /var/lib/rancher/k3s/server/manifests/10-invokeai-helmchart.yaml"
         "r /var/lib/rancher/k3s/server/manifests/20-invokeai-cert.yaml"

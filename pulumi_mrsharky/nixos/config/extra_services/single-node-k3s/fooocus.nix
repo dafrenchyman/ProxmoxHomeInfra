@@ -116,86 +116,68 @@
       renewBefore: 360h
   '';
 
-  fooocusHelmChart = pkgs.writeText "10-fooocus-helmchart.yaml" (
-    ''
-      apiVersion: helm.cattle.io/v1
-      kind: HelmChart
-      metadata:
-        name: fooocus
-        namespace: kube-system
-      spec:
-        repo: https://charts.mrsharky.com
-        chart: fooocus_extend
-        version: 0.1.0
-        targetNamespace: default
-        valuesContent: |
-          image:
-            tag: ${cfg.image_tag}
-          fooocusExtend:
-            timezone: ${config.time.timeZone}
-            uid: "${toString cfg.uid}"
-            gid: "${toString cfg.gid}"
-            port: ${toString fooocusPort}
-            cmdArgs: "${cfg.fooocus_args}"
-            replicas: ${toString cfg.replicas}
-          resources:
-    ''
-    + indent 10 resourcesYaml
-    + ''
-      nodeSelector:
-    ''
-    + indent 10 nodeSelectorYaml
-    + ''
-      tolerations:
-    ''
-    + indent 10 tolerationsYaml
-    + ''
-      affinity:
-    ''
-    + indent 10 affinityYaml
-    + ''
-      defaultPodOptions:
-    ''
-    + indent 10 defaultPodOptionsYaml
-    + ''
-      containerSecurityContext:
-    ''
-    + indent 10 containerSecurityContextYaml
-    + ''
-      persistence:
-    ''
-    + indent 10 persistenceYaml
-    + ''
-      ingress:
-        main:
-          enabled: true
-          className: nginx
-          annotations:
-    ''
-    + indent 14 ingressAnnotationsYaml
-    + ''
-      hosts:
-        - host: ${cfg.subdomain}.${parent.full_hostname}
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: main
-                port: http
-        - host: ${cfg.subdomain}.${parent.node_master_ip}.nip.io
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: main
-                port: http
-      tls:
-        - secretName: fooocus-tls-secret
-          hosts:
-            - ${cfg.subdomain}.${parent.full_hostname}
-            - ${cfg.subdomain}.${parent.node_master_ip}.nip.io
-    ''
-  );
+  fooocusHelmChart = pkgs.writeText "10-fooocus-helmchart.yaml" ''
+    apiVersion: helm.cattle.io/v1
+    kind: HelmChart
+    metadata:
+      name: fooocus
+      namespace: kube-system
+    spec:
+      repo: https://charts.mrsharky.com
+      chart: fooocus_extend
+      version: 0.1.0
+      targetNamespace: default
+      valuesContent: |
+        image:
+          tag: ${cfg.image_tag}
+        fooocusExtend:
+          timezone: ${config.time.timeZone}
+          uid: "${toString cfg.uid}"
+          gid: "${toString cfg.gid}"
+          port: ${toString fooocusPort}
+          cmdArgs: "${cfg.fooocus_args}"
+          replicas: ${toString cfg.replicas}
+        resources:
+    ${indent 6 resourcesYaml}
+        nodeSelector:
+    ${indent 6 nodeSelectorYaml}
+        tolerations:
+    ${indent 6 tolerationsYaml}
+        affinity:
+    ${indent 6 affinityYaml}
+        defaultPodOptions:
+    ${indent 6 defaultPodOptionsYaml}
+        containerSecurityContext:
+    ${indent 6 containerSecurityContextYaml}
+        persistence:
+    ${indent 6 persistenceYaml}
+        ingress:
+          main:
+            enabled: true
+            className: nginx
+            annotations:
+    ${indent 12 ingressAnnotationsYaml}
+            hosts:
+              - host: ${cfg.subdomain}.${parent.full_hostname}
+                paths:
+                  - path: /
+                    pathType: Prefix
+                    service:
+                      identifier: main
+                      port: http
+              - host: ${cfg.subdomain}.${parent.node_master_ip}.nip.io
+                paths:
+                  - path: /
+                    pathType: Prefix
+                    service:
+                      identifier: main
+                      port: http
+            tls:
+              - secretName: fooocus-tls-secret
+                hosts:
+                  - ${cfg.subdomain}.${parent.full_hostname}
+                  - ${cfg.subdomain}.${parent.node_master_ip}.nip.io
+  '';
 in {
   options.extraServices.single_node_k3s.fooocus = {
     enable = lib.mkEnableOption "Fooocus service";

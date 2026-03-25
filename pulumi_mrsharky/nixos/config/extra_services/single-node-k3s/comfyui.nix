@@ -239,136 +239,123 @@
       renewBefore: 360h
   '';
 
-  comfyuiHelmChart = pkgs.writeText "10-comfyui-helmchart.yaml" (
-    ''
-      apiVersion: helm.cattle.io/v1
-      kind: HelmChart
-      metadata:
-        name: comfyui
-        namespace: kube-system
-      spec:
-        repo: http://charts.mrsharky.com
-        chart: comfyui
-        version: 0.1.2
-        targetNamespace: default
-        valuesContent: |
-          defaultPodOptions:
-    ''
-    + indent 10 defaultPodOptionsYaml
-    + ''
-      controllers:
-        main:
-          type: deployment
-          revisionHistoryLimit: 1
-          strategy: Recreate
-          pod:
-            nodeSelector:
-    ''
-    + indent 16 (lib.generators.toYAML {} cfg.nodeSelector)
-    + lib.optionalString (initContainersAttrs != {}) ''
-                  initContainers:
+  comfyuiHelmChart = pkgs.writeText "10-comfyui-helmchart.yaml" ''
+    apiVersion: helm.cattle.io/v1
+    kind: HelmChart
+    metadata:
+      name: comfyui
+      namespace: kube-system
+    spec:
+      repo: http://charts.mrsharky.com
+      chart: comfyui
+      version: 0.1.2
+      targetNamespace: default
+      valuesContent: |
+        defaultPodOptions:
+    ${indent 10 defaultPodOptionsYaml}
+        controllers:
+          main:
+            type: deployment
+            revisionHistoryLimit: 1
+            strategy: Recreate
+            pod:
+              nodeSelector:
+    ${indent 12 (lib.generators.toYAML {} cfg.nodeSelector)}${lib.optionalString (initContainersAttrs != {}) ''
+                initContainers:
       ${indent 14 initContainersYaml}
-    ''
-    + ''
-      containers:
-        app:
-          image:
-            repository: ghcr.io/dafrenchyman/comfyui
-            tag: ${cfg.image_tag}
-            pullPolicy: IfNotPresent
-          env:
-    ''
-    + indent 18 envYaml
-    + ''
-      resources:
-    ''
-    + indent 18 resourcesYaml
-    + ''
-              ports:
-                - name: web
-                  containerPort: 8188
-                  protocol: TCP
-              probes:
-                startup:
-                  enabled: true
-                  custom: true
-                  spec:
-                    tcpSocket:
-                      port: web
-                    initialDelaySeconds: 10
-                    periodSeconds: 10
-                    timeoutSeconds: 5
-                    failureThreshold: 30
-                readiness:
-                  enabled: true
-                  custom: true
-                  spec:
-                    tcpSocket:
-                      port: web
-                    initialDelaySeconds: 20
-                    periodSeconds: 15
-                    timeoutSeconds: 5
-                    failureThreshold: 6
-                liveness:
-                  enabled: true
-                  custom: true
-                  spec:
-                    tcpSocket:
-                      port: web
-                    initialDelaySeconds: 60
-                    periodSeconds: 30
-                    timeoutSeconds: 5
-                    failureThreshold: 5
-      service:
-        main:
-          enabled: true
-          controller: main
-          type: ClusterIP
-          ports:
-            http:
-              port: 8188
-              targetPort: web
-              protocol: TCP
+    ''}
+            containers:
+              app:
+                image:
+                  repository: ghcr.io/dafrenchyman/comfyui
+                  tag: ${cfg.image_tag}
+                  pullPolicy: IfNotPresent
+                env:
+    ${indent 14 envYaml}
+                resources:
+    ${indent 14 resourcesYaml}
+                ports:
+                  - name: web
+                    containerPort: 8188
+                    protocol: TCP
+                probes:
+                  startup:
+                    enabled: true
+                    custom: true
+                    spec:
+                      tcpSocket:
+                        port: web
+                      initialDelaySeconds: 10
+                      periodSeconds: 10
+                      timeoutSeconds: 5
+                      failureThreshold: 30
+                  readiness:
+                    enabled: true
+                    custom: true
+                    spec:
+                      tcpSocket:
+                        port: web
+                      initialDelaySeconds: 20
+                      periodSeconds: 15
+                      timeoutSeconds: 5
+                      failureThreshold: 6
+                  liveness:
+                    enabled: true
+                    custom: true
+                    spec:
+                      tcpSocket:
+                        port: web
+                      initialDelaySeconds: 60
+                      periodSeconds: 30
+                      timeoutSeconds: 5
+                      failureThreshold: 5
 
-      persistence:
-    ''
-    + indent 10 persistenceYaml
-    + ''
+        service:
+          main:
+            enabled: true
+            controller: main
+            type: ClusterIP
+            ports:
+              http:
+                port: 8188
+                targetPort: web
+                protocol: TCP
 
-      ingress:
-        main:
-          enabled: true
-          className: nginx
-          annotations:
-            nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-            gethomepage.dev/enabled: "true"
-            gethomepage.dev/group: AI
-            gethomepage.dev/name: ComfyUI
-            gethomepage.dev/description: ComfyUI with bundled ComfyUI-Manager.
-            gethomepage.dev/icon: comfyui.svg
-            gethomepage.dev/siteMonitor: http://comfyui.default.svc.cluster.local:8188
-          hosts:
-            - host: ${cfg.subdomain}.${parent.full_hostname}
-              paths:
-                - path: /
-                  pathType: Prefix
-                  service:
-                    identifier: main
-                    port: http
-            - host: ${cfg.subdomain}.${parent.node_master_ip}.nip.io
-              paths:
-                - path: /
-                  pathType: Prefix
-                  service:
-                    identifier: main
-                    port: http
-          tls:
-            - secretName: comfyui-tls-secret
-              hosts:
-                - ${cfg.subdomain}.${parent.full_hostname}
-                - ${cfg.subdomain}.${parent.node_master_ip}.nip.io
-    ''
-  );
+        persistence:
+    ${indent 6 persistenceYaml}
+        ingress:
+          main:
+            enabled: true
+            className: nginx
+            annotations:
+              nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+              gethomepage.dev/enabled: "true"
+              gethomepage.dev/group: AI
+              gethomepage.dev/name: ComfyUI
+              gethomepage.dev/description: ComfyUI with bundled ComfyUI-Manager.
+              gethomepage.dev/icon: comfyui.svg
+              gethomepage.dev/siteMonitor: http://comfyui.default.svc.cluster.local:8188
+            hosts:
+              - host: ${cfg.subdomain}.${parent.full_hostname}
+                paths:
+                  - path: /
+                    pathType: Prefix
+                    service:
+                      identifier: main
+                      port: http
+              - host: ${cfg.subdomain}.${parent.node_master_ip}.nip.io
+                paths:
+                  - path: /
+                    pathType: Prefix
+                    service:
+                      identifier: main
+                      port: http
+            tls:
+              - secretName: comfyui-tls-secret
+                hosts:
+                  - ${cfg.subdomain}.${parent.full_hostname}
+                  - ${cfg.subdomain}.${parent.node_master_ip}.nip.io
+  '';
 in {
   options.extraServices.single_node_k3s.comfyui = {
     enable = lib.mkEnableOption "ComfyUI service deployed from the mrsharky Helm chart";
