@@ -6,6 +6,7 @@
 }: let
   cfg = config.extraServices.single_node_k3s.plex;
   parent = config.extraServices.single_node_k3s;
+  plexPreferencesPath = "/plex-config/Library/Application Support/Plex Media Server/Preferences.xml";
 
   # Volume Mounts
   plexPVs = pkgs.writeText "00-plex-pvs.yaml" ''
@@ -218,6 +219,57 @@
       renewBefore: 360h  # 15 days before expiration
   '';
 
+  # Placeholder Secret so dependent workloads can start before the token sync job updates it.
+  plexHomepageTokenSecret = pkgs.writeText "05-plex-homepage-token-secret.yaml" ''
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: plex-homepage-token
+      namespace: default
+    type: Opaque
+    stringData:
+      token: ""
+  '';
+
+  # RBAC for the Plex token sync job.
+  plexTokenJobRbac = pkgs.writeText "15-plex-token-rbac.yaml" ''
+    apiVersion: v1
+    kind: ServiceAccount
+    metadata:
+      name: plex-token-writer
+      namespace: default
+    ---
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: plex-token-writer
+      namespace: default
+    rules:
+      - apiGroups: [""]
+        resources: ["secrets"]
+        verbs: ["get", "list", "create", "update", "patch", "watch"]
+      - apiGroups: ["networking.k8s.io"]
+        resources: ["ingresses"]
+        verbs: ["get", "list", "patch", "update", "watch"]
+      - apiGroups: ["apps"]
+        resources: ["deployments"]
+        verbs: ["get", "list", "watch"]
+    ---
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    metadata:
+      name: plex-token-writer
+      namespace: default
+    subjects:
+      - kind: ServiceAccount
+        name: plex-token-writer
+        namespace: default
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: Role
+      name: plex-token-writer
+  '';
+
   # Chart
   plexHelmChart = pkgs.writeText "10-plex-helmchart.yaml" ''
         apiVersion: helm.cattle.io/v1
@@ -352,7 +404,6 @@
                   gethomepage.dev/href: https://${cfg.subdomain}.${parent.full_hostname}
                   gethomepage.dev/widget.type: plex
                   gethomepage.dev/widget.url: http://plex.default.svc.cluster.local:32400
-                  gethomepage.dev/widget.key: ${cfg.token}
                   gethomepage.dev/siteMonitor: http://plex.default.svc.cluster.local:32400
                 tls:
                 - hosts:
@@ -411,7 +462,10 @@
                   - name: PLEX_SERVER
                     value: "http://plex.default.svc.cluster.local:32400"
                   - name: PLEX_TOKEN
-                    value: "${cfg.token}"
+                    valueFrom:
+                      secretKeyRef:
+                        name: plex-homepage-token
+                        key: token
                   - name: TZ
                     value: "${config.time.timeZone}"
 
@@ -434,6 +488,148 @@
                 port: 9000
                 targetPort: metrics
                 protocol: TCP
+  '';
+
+  # Change the Job name when the rendered manifests change so k3s will create a fresh one-shot job on updates.
+  plexTokenJobVersion = builtins.substring 0 8 (builtins.hashString "sha256" ''
+    ${plexHelmChart}
+    ${plexExporterChart}
+    ${plexCert}
+    ${cfg.subdomain}
+    ${cfg.metallb_ip}
+    ${cfg.config_path}
+  '');
+
+  # Discover the Plex server token after the server and ingress have settled, then inject it into Homepage and the exporter.
+  plexTokenJob = pkgs.writeText "20-plex-token-job.yaml" ''
+    apiVersion: batch/v1
+    kind: Job
+    metadata:
+      name: plex-homepage-token-${plexTokenJobVersion}
+      namespace: default
+    spec:
+      ttlSecondsAfterFinished: 86400
+      backoffLimit: 6
+      template:
+        spec:
+          serviceAccountName: plex-token-writer
+          restartPolicy: OnFailure
+          volumes:
+            - name: plex-config
+              persistentVolumeClaim:
+                claimName: plex-config-pvc
+          containers:
+            - name: sync-token
+              image: alpine:3.20
+              command: ["/bin/sh", "-c"]
+              volumeMounts:
+                - name: plex-config
+                  mountPath: /plex-config
+                  readOnly: true
+              env:
+                - name: PREFS_PATH
+                  value: "${plexPreferencesPath}"
+                - name: TOKEN_SECRET_NAME
+                  value: "plex-homepage-token"
+                - name: INGRESS_NAME
+                  value: "plex"
+                - name: INGRESS_NS
+                  value: "default"
+                - name: EXPORTER_DEPLOYMENT
+                  value: "plex-exporter"
+              args:
+                - |
+                  set -euo pipefail
+                  echo "[init] installing tools..."
+                  apk add --no-cache curl kubectl xmlstarlet >/dev/null
+
+                  echo "[wait] waiting for ${plexPreferencesPath} ..."
+                  i=0
+                  until [ -f "$PREFS_PATH" ]; do
+                    i=$((i + 1))
+                    if [ "$i" -gt 120 ]; then
+                      echo "[fatal] Preferences.xml was not created within 10 minutes"
+                      exit 1
+                    fi
+                    sleep 5
+                  done
+
+                  echo "[wait] waiting for Plex claim to complete ..."
+                  i=0
+                  ACCOUNT_TOKEN=""
+                  MACHINE_ID=""
+                  until [ -n "$ACCOUNT_TOKEN" ] && [ -n "$MACHINE_ID" ]; do
+                    ACCOUNT_TOKEN="$(xmlstarlet sel -t -v '/Preferences/@PlexOnlineToken' "$PREFS_PATH" 2>/dev/null || true)"
+                    MACHINE_ID="$(xmlstarlet sel -t -v '/Preferences/@ProcessedMachineIdentifier' "$PREFS_PATH" 2>/dev/null || true)"
+                    if [ -z "$MACHINE_ID" ]; then
+                      MACHINE_ID="$(xmlstarlet sel -t -v '/Preferences/@MachineIdentifier' "$PREFS_PATH" 2>/dev/null || true)"
+                    fi
+                    if [ -n "$ACCOUNT_TOKEN" ] && [ -n "$MACHINE_ID" ]; then
+                      break
+                    fi
+                    i=$((i + 1))
+                    if [ "$i" -gt 120 ]; then
+                      echo "[fatal] Plex is not claimed yet; missing PlexOnlineToken or MachineIdentifier"
+                      exit 1
+                    fi
+                    sleep 5
+                  done
+
+                  echo "[wait] waiting for Plex deployment and ingress ..."
+                  kubectl -n "$INGRESS_NS" wait --for=condition=available --timeout=300s deployment/plex
+                  i=0
+                  until kubectl -n "$INGRESS_NS" get ingress "$INGRESS_NAME" >/dev/null 2>&1; do
+                    i=$((i + 1))
+                    if [ "$i" -gt 60 ]; then
+                      echo "[fatal] Plex ingress did not appear within 5 minutes"
+                      exit 1
+                    fi
+                    sleep 5
+                  done
+
+                  echo "[wait] waiting for ingress to settle ..."
+                  stable_count=0
+                  last_resource_version=""
+                  while [ "$stable_count" -lt 3 ]; do
+                    current_resource_version="$(kubectl -n "$INGRESS_NS" get ingress "$INGRESS_NAME" -o jsonpath='{.metadata.resourceVersion}')"
+                    if [ "$current_resource_version" = "$last_resource_version" ] && [ -n "$current_resource_version" ]; then
+                      stable_count=$((stable_count + 1))
+                    else
+                      stable_count=0
+                      last_resource_version="$current_resource_version"
+                    fi
+                    sleep 5
+                  done
+
+                  echo "[plex] fetching server token for machine $MACHINE_ID ..."
+                  RESOURCE_XML="$(mktemp)"
+                  curl -fsS \
+                    -H 'Accept: application/xml' \
+                    -H 'X-Plex-Token: '"$ACCOUNT_TOKEN" \
+                    "https://plex.tv/api/resources?includeHttps=1" \
+                    -o "$RESOURCE_XML"
+
+                  TOKEN="$(xmlstarlet sel -t \
+                    -m "/MediaContainer/Device[@clientIdentifier='$MACHINE_ID' or @machineIdentifier='$MACHINE_ID']" \
+                    -v '@accessToken' -n "$RESOURCE_XML" | head -n 1)"
+
+                  if [ -z "$TOKEN" ]; then
+                    echo "[fatal] unable to determine Plex server access token from plex.tv resources"
+                    exit 1
+                  fi
+
+                  kubectl -n "$INGRESS_NS" create secret generic "$TOKEN_SECRET_NAME" \
+                    --from-literal=token="$TOKEN" \
+                    --dry-run=client -o yaml | kubectl apply -f -
+
+                  echo "[patch] annotating ingress with homepage token ..."
+                  kubectl -n "$INGRESS_NS" annotate ingress "$INGRESS_NAME" \
+                    "gethomepage.dev/widget.key=$TOKEN" --overwrite
+
+                  echo "[rollout] restarting exporter deployment to pick up the refreshed token ..."
+                  kubectl -n "$INGRESS_NS" rollout restart deployment "$EXPORTER_DEPLOYMENT" || true
+                  kubectl -n "$INGRESS_NS" rollout status deployment "$EXPORTER_DEPLOYMENT" --timeout=180s || true
+                  echo "[done]"
   '';
 
   # NZBget Prometheus Exporter Chart
@@ -507,13 +703,6 @@ in {
       description = "Plex claim if needed (https://account.plex.tv/claim)";
     };
 
-    token = lib.mkOption {
-      type = lib.types.str;
-      default = "";
-      example = "your-token";
-      description = "Client Token";
-    };
-
     extraVolumes = lib.mkOption {
       description = ''
         Extra hostPath-backed volumes to mount into Plex.
@@ -585,9 +774,12 @@ in {
           # Chart files to automatically pick up
           "L+ /var/lib/rancher/k3s/server/manifests/00-plex-content-pvs.yaml - - - - ${plexContentPvsFile}"
           "L+ /var/lib/rancher/k3s/server/manifests/00-plex-pvs.yaml - - - - ${plexPVs}"
+          "L+ /var/lib/rancher/k3s/server/manifests/05-plex-homepage-token-secret.yaml - - - - ${plexHomepageTokenSecret}"
           "L+ /var/lib/rancher/k3s/server/manifests/10-plex-helmchart.yaml - - - - ${plexHelmChart}"
           "L+ /var/lib/rancher/k3s/server/manifests/10-plex-exporter-helmchart.yaml - - - - ${plexExporterChart}"
+          "L+ /var/lib/rancher/k3s/server/manifests/15-plex-token-rbac.yaml - - - - ${plexTokenJobRbac}"
           "L+ /var/lib/rancher/k3s/server/manifests/20-plex-cert.yaml - - - - ${plexCert}"
+          "L+ /var/lib/rancher/k3s/server/manifests/20-plex-token-job.yaml - - - - ${plexTokenJob}"
           "L+ /var/lib/rancher/k3s/server/manifests/30-plex-grafana-dashboard.yaml - - - - ${plexGrafanaDashboard}"
 
           # Create folders and correct permissions
@@ -601,9 +793,12 @@ in {
         # Remove symbolic links of not enabled
         "r /var/lib/rancher/k3s/server/manifests/00-plex-content-pvs.yaml"
         "r /var/lib/rancher/k3s/server/manifests/00-plex-pvs.yaml"
+        "r /var/lib/rancher/k3s/server/manifests/05-plex-homepage-token-secret.yaml"
         "r /var/lib/rancher/k3s/server/manifests/10-plex-helmchart.yaml"
         "r /var/lib/rancher/k3s/server/manifests/10-plex-exporter-helmchart.yaml"
+        "r /var/lib/rancher/k3s/server/manifests/15-plex-token-rbac.yaml"
         "r /var/lib/rancher/k3s/server/manifests/20-plex-cert.yaml"
+        "r /var/lib/rancher/k3s/server/manifests/20-plex-token-job.yaml"
         "r /var/lib/rancher/k3s/server/manifests/30-plex-grafana-dashboard.yaml"
       ];
     })

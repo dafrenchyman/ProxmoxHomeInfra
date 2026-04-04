@@ -159,7 +159,7 @@
               icon: https://images.opencollective.com/games-on-whales/33a2797/logo/128.png
               href: http://nixoskubemini.home.arpa:3000
               description: Web UI for Games-on-whales Wolf
-              siteMonitor: http://${parent.node_master_ip}:3000
+              siteMonitor: http://nixoskubemini.home.arpa:3000
     ''}
           widgets:
     ${indentN 12 ''

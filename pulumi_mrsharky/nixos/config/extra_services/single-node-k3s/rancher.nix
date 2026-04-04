@@ -178,7 +178,8 @@
             gethomepage.dev/description: Centralized Kubernetes and cluster management UI.
             gethomepage.dev/icon: rancher.png
             gethomepage.dev/href: https://${rancherHostname}/
-            gethomepage.dev/siteMonitor: https://${rancherHostname}/
+            gethomepage.dev/siteMonitor: https://rancher.cattle-system.svc.cluster.local
+            gethomepage.dev/pod-selector: app=rancher
           tls:
             source: secret
         privateCA: ${

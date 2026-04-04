@@ -138,7 +138,7 @@
               gethomepage.dev/name: Open WebUI
               gethomepage.dev/description: An extensible, feature-rich, and user-friendly self-hosted AI platform designed to operate entirely offline
               gethomepage.dev/icon: open-webui.png
-              gethomepage.dev/siteMonitor: http://chat.default.svc.cluster.local:8080
+              gethomepage.dev/siteMonitor: http://open-webui.default.svc.cluster.local
             host: ${cfg.subdomain}.${parent.full_hostname}
             additionalHosts:
               - ${cfg.subdomain}.${parent.node_master_ip}.nip.io

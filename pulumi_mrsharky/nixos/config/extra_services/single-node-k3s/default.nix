@@ -278,9 +278,11 @@
   '';
 in {
   imports = [
+    ./ace-step-1-5.nix
     ./airsonic.nix
     ./audiobookshelf.nix
     ./comfyui.nix
+    ./cooklang.nix
     ./fooocus.nix
     ./forge.nix
     ./gitea.nix
@@ -360,8 +362,8 @@ in {
     nvidia_time_slicing = {
       replicas = lib.mkOption {
         type = lib.types.int;
-        default = 4;
-        example = 4;
+        default = 6;
+        example = 6;
         description = "How many shared nvidia.com/gpu scheduler slots to expose per physical NVIDIA GPU.";
       };
     };

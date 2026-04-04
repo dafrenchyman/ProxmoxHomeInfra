@@ -144,6 +144,7 @@
                 gethomepage.dev/description: A self-hosted application designed to organize, manage, and stream your personal multimedia content, such as photos, videos, music, and more, while providing features like tagging, categorization, and sharing.
                 gethomepage.dev/icon: immich.png
                 gethomepage.dev/siteMonitor: http://immich-server.default.svc.cluster.local:2283
+                gethomepage.dev/pod-selector: app.kubernetes.io/instance=immich,app.kubernetes.io/name=server
               hosts:
                 - host: ${cfg.subdomain}.${parent.full_hostname}
                   paths:
@@ -170,6 +171,7 @@
               ports:
                 http:
                   port: 2283
+
           controllers:
             main:
               containers:
@@ -255,7 +257,8 @@
 
         immich:
           metrics:
-            enabled: true
+            # Re-enable after installing Prometheus Operator CRDs such as ServiceMonitor.
+            enabled: false
           # Library PVC required by chart README
           persistence:
             library:
