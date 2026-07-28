@@ -189,7 +189,7 @@ in {
 
     chart_version = lib.mkOption {
       type = lib.types.str;
-      default = "1.49.0";
+      default = "1.56.0";
       description = "Version of the ollama Helm chart.";
     };
 
@@ -232,7 +232,8 @@ in {
         type = lib.types.listOf lib.types.str;
         default = [
           "deepcoder:14b"
-          "deepseek-r1:32b"
+          # "deepseek-r1:32b"  # too big to run well
+          "deepseek-r1:14b"
           # "devstral:24b"
           # "gemma3:27b"
           # "gpt-oss:20b"
@@ -246,8 +247,14 @@ in {
           # "qwen2.5-coder:7b"
           # "qwen2.5vl:32b"
           # "qwen3:32b"
+          "mistral-small3.2:24b-instruct-2506-q4_K_M"
+          "gemma4:26b"
+          #"hf.co/Qwen/Qwen3-32B-GGUF:Q4_K_M"
+          "qwen3:30b"
           "qwen3-coder:30b"
           "hf.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:UD-Q4_K_XL"
+          #"hf.co/unsloth/Qwen3-30B-A3B-GGUF:UD-Q4_K_XL"
+          #"hf.co/QuantFactory/DeepSeek-R1-Distill-Qwen-14B-GGUF:Q4_K_M"
           # "qwen3.5:9b"
           # "qwen3.5:27b"
         ];

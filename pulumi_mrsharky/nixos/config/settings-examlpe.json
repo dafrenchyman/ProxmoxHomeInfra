@@ -11,7 +11,7 @@
   "custom_glances_enable": false,
   "desktop_apps_enable": false,
   "gpu_enable": false,
-  "gpu_gpu_type": "",
+  "gpu_type": "software",
   "gow_wolf_enable": false,
   "fileserver_enable": false,
   "fileserver_username": "",

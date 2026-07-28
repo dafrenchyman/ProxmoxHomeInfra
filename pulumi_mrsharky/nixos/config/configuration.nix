@@ -31,6 +31,7 @@ in {
   environment.systemPackages = with pkgs; [
     # Terminal Tools
     bat
+    cloud-utils # Useful for Proxmox VMs for disk resizing
     dig
     git
     nano

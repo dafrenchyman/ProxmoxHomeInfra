@@ -283,6 +283,7 @@ in {
     ./audiobookshelf.nix
     ./comfyui.nix
     ./cooklang.nix
+    ./docling-serve.nix
     ./fooocus.nix
     ./forge.nix
     ./gitea.nix
@@ -296,6 +297,7 @@ in {
     ./nzbget.nix
     ./ollama.nix
     ./open-webui.nix
+    ./paddleocr-vl.nix
     ./pigallery2.nix
     ./plex.nix
     ./rancher.nix
@@ -372,15 +374,15 @@ in {
       eviction_hard = {
         nodefs_available = lib.mkOption {
           type = lib.types.str;
-          default = "5%";
-          example = "5%";
+          default = "20Gi";
+          example = "20Gi";
           description = "Hard eviction threshold for available space on the node filesystem.";
         };
 
         imagefs_available = lib.mkOption {
           type = lib.types.str;
-          default = "5%";
-          example = "5%";
+          default = "20Gi";
+          example = "20Gi";
           description = "Hard eviction threshold for available space on the image filesystem.";
         };
 
@@ -402,15 +404,15 @@ in {
       image_gc = {
         high_threshold_percent = lib.mkOption {
           type = lib.types.int;
-          default = 95;
-          example = 95;
+          default = 98;
+          example = 98;
           description = "Image garbage collection high threshold percentage for kubelet.";
         };
 
         low_threshold_percent = lib.mkOption {
           type = lib.types.int;
-          default = 90;
-          example = 90;
+          default = 95;
+          example = 95;
           description = "Image garbage collection low threshold percentage for kubelet.";
         };
       };

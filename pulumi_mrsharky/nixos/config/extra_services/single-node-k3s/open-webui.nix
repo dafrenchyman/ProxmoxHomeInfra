@@ -185,7 +185,7 @@ in {
     # Open WebUI chart config
     openwebui_chart_version = lib.mkOption {
       type = lib.types.str;
-      default = "12.8.1";
+      default = "14.5.0";
       description = "Open WebUI chart version to install (pin for reproducibility).";
     };
 

@@ -109,6 +109,17 @@ in {
         # package = config.boot.kernelPackages.nvidiaPackages.stable;
       };
 
+      # Docker Compose files that request `driver: nvidia` need Docker's
+      # legacy NVIDIA runtime registered in daemon.json. Docker's `--gpus`
+      # device-request path also probes for nvidia-container-runtime-hook in
+      # the dockerd service PATH, so expose the toolkit's tools output there.
+      # The toolkit option provides CDI for newer Docker/containerd flows.
+      hardware.nvidia-container-toolkit.enable = true;
+      virtualisation.docker.enableNvidia = true;
+      virtualisation.docker.extraPackages = [
+        config.hardware.nvidia-container-toolkit.package.tools
+      ];
+
       #      environment.systemPackages = with pkgs; [
       #        nvidia-smi
       #      ];

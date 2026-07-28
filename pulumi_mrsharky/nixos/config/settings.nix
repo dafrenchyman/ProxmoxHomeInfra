@@ -44,7 +44,7 @@ let
 
     # Setup GPU
     gpu_enable = false;
-    gpu_gpu_type = "";
+    gpu_type = "software";
 
     # Games on Whales - Wolf
     gow_wolf = {
