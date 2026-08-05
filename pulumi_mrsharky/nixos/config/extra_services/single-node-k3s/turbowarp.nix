@@ -60,7 +60,7 @@
           "gethomepage.dev/group" = "Tools";
           "gethomepage.dev/name" = "TurboWarp";
           "gethomepage.dev/description" = "Scratch-compatible editor for local self-hosting.";
-          "gethomepage.dev/icon" = "turbowarp.png";
+          "gethomepage.dev/icon" = "https://scratch.mit.edu/favicon.ico";
           "gethomepage.dev/href" = "https://${cfg.subdomain}.${parent.full_hostname}/editor.html";
           "gethomepage.dev/siteMonitor" = "http://${serviceName}.default.svc.cluster.local:${toString containerPort}/editor.html";
         };
