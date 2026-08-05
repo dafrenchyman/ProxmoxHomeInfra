@@ -146,7 +146,7 @@
       valuesContent: |
         image:
           repository: lscr.io/linuxserver/ubooquity
-          tag: 3.1.0-ls67
+          tag: 3.1.0-ls91
           pullPolicy: IfNotPresent
         env:
           TZ: "${config.time.timeZone}"

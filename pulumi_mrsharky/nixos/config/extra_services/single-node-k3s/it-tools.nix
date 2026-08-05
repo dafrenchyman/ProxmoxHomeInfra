@@ -100,10 +100,11 @@ in {
       description = "Subdomain prefix used for the IT-Tools ingress.";
     };
 
+    # https://github.com/sharevb/it-tools/pkgs/container/it-tools
     image_tag = lib.mkOption {
       type = lib.types.str;
-      default = "2025.10.19";
-      example = "2025.10.19";
+      default = "2026.7.11";
+      example = "2026.7.11";
       description = "Pinned IT-Tools image tag.";
     };
   };

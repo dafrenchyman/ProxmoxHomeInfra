@@ -303,6 +303,7 @@ in {
     ./rancher.nix
     ./swarmui.nix
     ./termix.nix
+    ./turbowarp.nix
     ./transmission-openvpn.nix
     ./trilium.nix
     ./ubooquity.nix

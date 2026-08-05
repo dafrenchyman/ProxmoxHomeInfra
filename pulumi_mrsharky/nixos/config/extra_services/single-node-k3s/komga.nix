@@ -48,7 +48,7 @@
               app:
                 image:
                   repository: gotson/komga
-                  tag: latest
+                  tag: 1.25.0
                   pullPolicy: IfNotPresent
                 env:
                   - name: TZ

@@ -285,7 +285,7 @@
           valuesContent: |
             image:
               repository: lscr.io/linuxserver/plex
-              tag: 1.42.2.10156-f737b826c-ls281
+              tag: 1.43.3.10828-00f62d37d-ls316
               pullPolicy: IfNotPresent
 
             env:

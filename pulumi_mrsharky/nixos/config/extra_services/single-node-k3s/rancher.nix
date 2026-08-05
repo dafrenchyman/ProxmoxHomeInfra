@@ -245,6 +245,8 @@ in {
           "L+ /var/lib/rancher/k3s/server/manifests/10-rancher-cert.yaml - - - - ${rancherCert}"
           "L+ /var/lib/rancher/k3s/server/manifests/14-rancher-placeholder-ca-secret.yaml - - - - ${rancherPlaceholderCaSecret}"
           "L+ /var/lib/rancher/k3s/server/manifests/20-rancher-helmchart.yaml - - - - ${rancherHelmChart}"
+          # Cleanup for the old cronjob manifest name; a dangling symlink here blocks k3s addon reconciliation.
+          "r /var/lib/rancher/k3s/server/manifests/16-rancher-ca-sync-cronjob.yaml"
         ]
         ++ lib.optionals cfg.private_ca [
           "L+ /var/lib/rancher/k3s/server/manifests/15-rancher-ca-sync-rbac.yaml - - - - ${rancherCaSyncRbac}"
@@ -259,6 +261,7 @@ in {
         "r /var/lib/rancher/k3s/server/manifests/14-rancher-placeholder-ca-secret.yaml"
         "r /var/lib/rancher/k3s/server/manifests/15-rancher-ca-sync-rbac.yaml"
         "r /var/lib/rancher/k3s/server/manifests/16-rancher-ca-sync-job.yaml"
+        "r /var/lib/rancher/k3s/server/manifests/16-rancher-ca-sync-cronjob.yaml"
         "r /var/lib/rancher/k3s/server/manifests/17-rancher-ca-sync-cronjob.yaml"
         "r /var/lib/rancher/k3s/server/manifests/20-rancher-helmchart.yaml"
       ];

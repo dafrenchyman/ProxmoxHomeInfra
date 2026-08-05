@@ -107,7 +107,7 @@
 
             image:
               repository: docker.io/jellyfin/jellyfin
-              tag: ${lib.escapeShellArg cfg.image_tag}
+              tag: "${cfg.image_tag}"
               pullPolicy: IfNotPresent
 
             jellyfin:
@@ -198,17 +198,19 @@ in {
     };
 
     # Helm chart controls
+    # https://github.com/jellyfin/jellyfin-helm/releases
     chart_version = lib.mkOption {
       type = lib.types.str;
-      default = "2.7.0";
-      example = "2.7.0";
+      default = "3.2.0";
+      example = "3.2.0";
       description = "jellyfin/jellyfin chart version from https://jellyfin.github.io/jellyfin-helm.";
     };
 
+    # https://hub.docker.com/r/jellyfin/jellyfin/tags
     image_tag = lib.mkOption {
       type = lib.types.str;
-      default = "2026022305-amd64";
-      example = "2026022305-amd64";
+      default = "2026072708";
+      example = "2026072708";
       description = "Jellyfin image tag. Empty uses the chart's appVersion.";
     };
 

@@ -187,9 +187,10 @@ in {
       description = "Subdomain prefix used for ingress.";
     };
 
+    # https://github.com/otwld/ollama-helm For the chart versions
     chart_version = lib.mkOption {
       type = lib.types.str;
-      default = "1.56.0";
+      default = "1.70.0";
       description = "Version of the ollama Helm chart.";
     };
 

@@ -183,9 +183,10 @@ in {
     };
 
     # Open WebUI chart config
+    # https://github.com/open-webui/helm-charts/tree/main/charts/open-webui
     openwebui_chart_version = lib.mkOption {
       type = lib.types.str;
-      default = "14.5.0";
+      default = "15.2.1";
       description = "Open WebUI chart version to install (pin for reproducibility).";
     };
 
